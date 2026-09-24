@@ -849,3 +849,48 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .real-slots{grid-template-columns:repeat(2,minmax(0,1fr))!important}.real-slots button{font-size:12px;line-height:1.25;min-height:48px}
 .consult-booking-form{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}.consult-booking-form input,.consult-booking-form select,.consult-booking-form textarea{width:100%;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:inherit;border-radius:10px;padding:11px 12px;font:inherit}.consult-booking-form textarea,.consult-booking-form button{grid-column:1/-1}.consult-booking-form textarea{min-height:80px;resize:vertical}.consult-booking-form select option{color:#111}
 @media(max-width:760px){.editor-mode-switch{order:3;width:100%;justify-content:center}.builder-center-tools{flex-wrap:wrap}.consult-booking-form{grid-template-columns:1fr}.real-slots{grid-template-columns:1fr!important}}
+
+
+/* Checkout UX hotfix: isolated readable theme + reachable inquiry paths */
+.checkout-dialog{
+  width:min(920px,calc(100vw - 28px))!important;
+  max-width:920px!important;
+  max-height:min(92dvh,920px)!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  overscroll-behavior:contain;
+  background:#f6f4ee!important;
+  color:#15171b!important;
+  border:1px solid #d9d7d0!important;
+  box-shadow:0 32px 110px rgba(0,0,0,.48)!important;
+  scrollbar-gutter:stable;
+}
+.checkout-dialog>button{position:sticky!important;top:14px!important;float:right;z-index:20;color:#fff!important;background:rgba(13,16,21,.72)!important;border:1px solid rgba(255,255,255,.18)!important;padding:8px!important;border-radius:999px!important;margin:12px 12px -48px 0!important;opacity:1!important;backdrop-filter:blur(12px)}
+.checkout-dialog .checkout-hero{background:radial-gradient(circle at 85% 0%,rgba(119,170,255,.18),transparent 38%),#10141b!important;color:#f7f8fa!important}
+.checkout-dialog .checkout-hero h2{color:#f7f8fa!important}
+.checkout-dialog .checkout-hero p{color:#b8c0cc!important}
+.checkout-dialog .checkout-project{color:#17191d!important;border-bottom-color:#d8d5ce!important}
+.checkout-dialog .checkout-project small,.checkout-dialog .checkout-project span{color:#69717d!important}
+.checkout-dialog .checkout-total span,.checkout-dialog .checkout-total small{color:#68717e!important}
+.checkout-dialog .checkout-total strong{color:#111318!important}
+.checkout-dialog .checkout-flow span{color:#5e6773!important;font-weight:700}
+.checkout-dialog .checkout-flow i{background:#d5d8dd!important}
+.checkout-dialog .direct-checkout{background:#eef4ff!important;border-color:#c8d9f7!important;color:#15171b!important}
+.checkout-dialog .direct-checkout b{color:#111318!important;font-size:15px}
+.checkout-dialog .direct-checkout p,.checkout-dialog .direct-checkout small,.checkout-dialog .direct-checkout .consent{color:#56606e!important}
+.checkout-dialog .direct-checkout .consent input,.checkout-dialog .inquiry-form .consent input{accent-color:#3478f6;flex:0 0 17px;width:17px!important;height:17px!important;cursor:pointer}
+.checkout-dialog .direct-checkout .btn-primary{width:100%;justify-content:center;min-height:48px;color:#07101f!important}
+.checkout-dialog .checkout-divider{color:#606a76!important;font-weight:800}
+.checkout-dialog .checkout-divider:before,.checkout-dialog .checkout-divider:after{background:#d4d7dc!important}
+.checkout-dialog .checkout-consult{background:#fff!important;border-color:#d9dce1!important;color:#17191d!important}
+.checkout-dialog .checkout-consult b{color:#17191d!important}
+.checkout-dialog .checkout-consult small{color:#606a76!important}
+.checkout-dialog .checkout-consult .btn-secondary{border-color:#bfc5cd!important;color:#17191d!important;background:#fff!important}
+.checkout-dialog .inquiry-form{background:#fff!important;border:1px solid #d9d7d0!important;color:#17191d!important;box-shadow:0 12px 30px rgba(18,22,30,.06)!important}
+.checkout-dialog .inquiry-form:before{content:"Unverbindliche Anfrage";display:block;font-size:16px;font-weight:850;color:#17191d;margin-bottom:-4px}
+.checkout-dialog .inquiry-form label:not(.consent){color:#343a44!important}
+.checkout-dialog .inquiry-form .consent{color:#58616d!important}
+.checkout-dialog .inquiry-form input,.checkout-dialog .inquiry-form textarea,.checkout-dialog .inquiry-form select{background:#fbfbfa!important;color:#15171b!important;border-color:#cfd3d8!important}
+.checkout-dialog .inquiry-form input::placeholder,.checkout-dialog .inquiry-form textarea::placeholder{color:#858c96!important;opacity:1}
+.checkout-dialog .inquiry-form .btn-primary{min-height:48px;color:#07101f!important}
+@media(max-width:760px){.checkout-dialog{width:calc(100vw - 16px)!important;max-height:94dvh!important}.checkout-dialog .checkout-project{gap:12px}.checkout-dialog .form-grid{grid-template-columns:1fr}.checkout-dialog .inquiry-form{margin-bottom:18px!important}.checkout-dialog>button{top:8px!important;margin-right:8px!important}}
