@@ -1,0 +1,9 @@
+<svg width="680" height="150" viewBox="0 0 680 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g fill="white">
+    <path d="M18 116H57C75 116 87 107 87 88V30H116V90C116 125 95 143 58 143H18V116Z"/>
+    <path d="M115 30H150L181 69L212 30H247L199 87L248 143H212L181 104L149 143H113L163 87L115 30Z"/>
+  </g>
+  <rect x="276" y="31" width="1" height="86" fill="white" fill-opacity=".28"/>
+  <text x="307" y="91" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="49" font-weight="500" letter-spacing="12">STUDIO</text>
+  <text x="309" y="124" fill="white" fill-opacity=".58" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="600" letter-spacing="5">DESIGN · DEVELOPMENT · DIGITAL</text>
+</svg>
