@@ -36,8 +36,10 @@ export async function GET(request: Request) {
   // Layout is part of the canonical SiteConfig. Older saved projects did not store it,
   // so derive it deterministically from the template id instead of silently falling back.
   const templateIndex = Number(String(c.templateId || "").match(/-(\d+)$/)?.[1] || 1) - 1;
-  const derivedLayout = (["split", "editorial", "impact"] as const)[Math.max(0, Math.min(2, templateIndex))] || "split";
-  const templateLayout = ["split","editorial","impact"].includes(c.templateLayout) ? c.templateLayout : derivedLayout;
+  const legacyLayouts = ["split", "editorial", "impact"] as const;
+  const derivedLayout = legacyLayouts[Math.max(0, Math.min(2, templateIndex))] || "split";
+  const validLayouts = ["split","editorial","impact","atelier","cinematic","architectural","performance","clinical","brutalist"];
+  const templateLayout = validLayouts.includes(c.templateLayout) ? c.templateLayout : derivedLayout;
   const text = (page:any, section:any, field:string, fallback:string) => esc(c.customText?.[`${page.id}:${section.id}:${field}`] ?? fallback);
   const pageHref = (p:any,i:number) => i === 0 ? "index.html" : `${slug(p.id || p.name)}.html`;
   const nav = pages.slice(0,4).map((p:any,i:number)=>`<a class="${i===0?'active':''}" href="${pageHref(p,i)}">${esc(p.name)}</a>`).join("");

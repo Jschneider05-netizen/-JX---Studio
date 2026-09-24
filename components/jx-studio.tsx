@@ -51,7 +51,7 @@ import { Toaster, toast } from "sonner";
 type View = "home" | "templates" | "builder" | "services" | "consultation" | "contact";
 type Device = "desktop" | "laptop" | "tablet" | "mobileLandscape" | "mobile";
 type SectionKind = "hero" | "services" | "about" | "projects" | "reviews" | "contact" | "cta";
-type TemplateLayout = "split" | "editorial" | "impact";
+type TemplateLayout = "split" | "editorial" | "impact" | "atelier" | "cinematic" | "architectural" | "performance" | "clinical" | "brutalist";
 type BuilderSetter = React.Dispatch<React.SetStateAction<BuilderState>>;
 
 type SectionStyle = { paddingY?: number; background?: string; color?: string; radius?: number; opacity?: number; blur?: number; scale?: number; rotate?: number; offsetX?: number; offsetY?: number };
@@ -86,6 +86,13 @@ type Template = {
   dark: string;
   image: string;
   layout: TemplateLayout;
+  surface?: string;
+  text?: string;
+  secondary?: string;
+  font?: "modern" | "editorial" | "technical";
+  buttonStyle?: "solid" | "outline" | "soft";
+  heroAlign?: "left" | "center" | "right";
+  radius?: number;
 };
 
 export type BuilderState = {
@@ -234,30 +241,63 @@ const templateWords: Record<string, [string, string, string][]> = {
   Tattoo: [["Inkhaus", "Dark", "Deine Idee. Unsere Handschrift."], ["Fine", "Editorial", "Linien mit Bedeutung."], ["Atelier 13", "Brutalist", "Art under skin."]],
 };
 
-const paletteMatrix = [
-  ["#77aaff", "#f2b66d", "#70d6a8", "#ff7d6b", "#8cb7ff", "#f4c363", "#6fd8c4", "#a8a0ff", "#f4a8cb"],
-  ["#9e7bff", "#ff8c78", "#71c7ff", "#c0a676", "#74d7ff", "#f05d5e", "#73a7ff", "#78b3ff", "#d496ff"],
-  ["#ff6b35", "#d8ff66", "#f1bd5c", "#99c8a9", "#ff674d", "#8fa4ff", "#71c7ff", "#77d79e", "#f1bd5c"],
-];
+const templateDirections: Record<string, Array<Pick<Template, "accent" | "dark" | "surface" | "text" | "secondary" | "layout" | "font" | "buttonStyle" | "heroAlign" | "radius">>> = {
+  Handwerk: [
+    { accent:"#ff5a2f", dark:"#111315", surface:"#f2efe7", text:"#17191b", secondary:"#d8d0c3", layout:"split", font:"technical", buttonStyle:"solid", heroAlign:"left", radius:8 },
+    { accent:"#c59a62", dark:"#171512", surface:"#f4f0e8", text:"#211d18", secondary:"#ddd1bf", layout:"architectural", font:"editorial", buttonStyle:"outline", heroAlign:"left", radius:2 },
+    { accent:"#ff6338", dark:"#090d10", surface:"#f0eee6", text:"#121416", secondary:"#d5d9d8", layout:"impact", font:"technical", buttonStyle:"solid", heroAlign:"left", radius:3 },
+  ],
+  Beauty: [
+    { accent:"#9a6f63", dark:"#211b1b", surface:"#f7f1ed", text:"#2a2321", secondary:"#eadbd3", layout:"atelier", font:"editorial", buttonStyle:"soft", heroAlign:"left", radius:28 },
+    { accent:"#d58aa7", dark:"#171316", surface:"#fff7f8", text:"#271e22", secondary:"#f1dce4", layout:"editorial", font:"editorial", buttonStyle:"solid", heroAlign:"center", radius:36 },
+    { accent:"#b69472", dark:"#1b1714", surface:"#f5efe7", text:"#241f1a", secondary:"#e6d7c7", layout:"atelier", font:"editorial", buttonStyle:"outline", heroAlign:"right", radius:22 },
+  ],
+  Gastronomie: [
+    { accent:"#b8472f", dark:"#21140f", surface:"#f5efe5", text:"#241b16", secondary:"#e1d1bc", layout:"editorial", font:"editorial", buttonStyle:"solid", heroAlign:"left", radius:4 },
+    { accent:"#c9a86a", dark:"#080909", surface:"#ebe7df", text:"#171714", secondary:"#d7cbb6", layout:"cinematic", font:"editorial", buttonStyle:"outline", heroAlign:"center", radius:0 },
+    { accent:"#e8663a", dark:"#10201b", surface:"#f2f0e7", text:"#18201d", secondary:"#d8dfd4", layout:"split", font:"modern", buttonStyle:"solid", heroAlign:"left", radius:18 },
+  ],
+  Immobilien: [
+    { accent:"#9b7a50", dark:"#151719", surface:"#f1f0ec", text:"#181a1b", secondary:"#d9d7d0", layout:"architectural", font:"editorial", buttonStyle:"outline", heroAlign:"left", radius:0 },
+    { accent:"#71889a", dark:"#101820", surface:"#f4f6f5", text:"#152028", secondary:"#dce4e7", layout:"split", font:"modern", buttonStyle:"solid", heroAlign:"left", radius:6 },
+    { accent:"#887b69", dark:"#171715", surface:"#eeeae2", text:"#1d1c19", secondary:"#d8d0c4", layout:"editorial", font:"editorial", buttonStyle:"soft", heroAlign:"right", radius:2 },
+  ],
+  Fitness: [
+    { accent:"#d9ff43", dark:"#090b09", surface:"#eef0e9", text:"#111410", secondary:"#d7dccd", layout:"performance", font:"technical", buttonStyle:"solid", heroAlign:"left", radius:4 },
+    { accent:"#67d9ff", dark:"#09131a", surface:"#eef3f4", text:"#101a1f", secondary:"#d4e4e8", layout:"split", font:"modern", buttonStyle:"outline", heroAlign:"left", radius:12 },
+    { accent:"#ff4d36", dark:"#0b0b0d", surface:"#f0ede9", text:"#171515", secondary:"#ded6cf", layout:"impact", font:"technical", buttonStyle:"solid", heroAlign:"center", radius:0 },
+  ],
+  Automotive: [
+    { accent:"#ff512f", dark:"#090b0e", surface:"#eceff0", text:"#111417", secondary:"#d1d7da", layout:"performance", font:"technical", buttonStyle:"solid", heroAlign:"left", radius:4 },
+    { accent:"#a6b5c6", dark:"#080a0d", surface:"#eceef0", text:"#15181b", secondary:"#d7dce1", layout:"cinematic", font:"modern", buttonStyle:"outline", heroAlign:"center", radius:2 },
+    { accent:"#50b9ff", dark:"#07131c", surface:"#edf3f5", text:"#111c22", secondary:"#d1e2e9", layout:"split", font:"technical", buttonStyle:"soft", heroAlign:"left", radius:10 },
+  ],
+  Reinigung: [
+    { accent:"#2d9b83", dark:"#10201d", surface:"#f2f5f2", text:"#17201d", secondary:"#d8e5df", layout:"split", font:"modern", buttonStyle:"solid", heroAlign:"left", radius:16 },
+    { accent:"#6c9db0", dark:"#112029", surface:"#f7f8f5", text:"#182126", secondary:"#dbe7e9", layout:"editorial", font:"modern", buttonStyle:"outline", heroAlign:"left", radius:20 },
+    { accent:"#4fbd8a", dark:"#102019", surface:"#f4f3ec", text:"#182019", secondary:"#dbe5d7", layout:"atelier", font:"modern", buttonStyle:"soft", heroAlign:"center", radius:26 },
+  ],
+  Praxis: [
+    { accent:"#3c8f88", dark:"#15302e", surface:"#f5f7f3", text:"#182321", secondary:"#dbe9e4", layout:"clinical", font:"modern", buttonStyle:"solid", heroAlign:"left", radius:18 },
+    { accent:"#5c82a6", dark:"#172733", surface:"#f5f7f8", text:"#182229", secondary:"#dce5eb", layout:"split", font:"modern", buttonStyle:"soft", heroAlign:"left", radius:14 },
+    { accent:"#a97866", dark:"#2b201d", surface:"#faf4ef", text:"#2a211e", secondary:"#eadbd2", layout:"atelier", font:"editorial", buttonStyle:"outline", heroAlign:"left", radius:24 },
+  ],
+  Tattoo: [
+    { accent:"#e8e0d2", dark:"#080808", surface:"#e9e5dd", text:"#141311", secondary:"#cec8bd", layout:"cinematic", font:"technical", buttonStyle:"outline", heroAlign:"center", radius:0 },
+    { accent:"#9b2d38", dark:"#171012", surface:"#f1ece7", text:"#21191a", secondary:"#dfd1cc", layout:"editorial", font:"editorial", buttonStyle:"solid", heroAlign:"left", radius:4 },
+    { accent:"#e0ff45", dark:"#090909", surface:"#efeee8", text:"#11110f", secondary:"#d7d5ca", layout:"brutalist", font:"technical", buttonStyle:"solid", heroAlign:"left", radius:0 },
+  ],
+};
 
-const layouts: TemplateLayout[] = ["split", "editorial", "impact"];
-const templates: Template[] = Object.entries(templateWords).flatMap(([category, variants], categoryIndex) =>
-  variants.map(([name, style, headline], index) => ({
-    id: `${category.toLowerCase()}-${index + 1}`,
-    category,
-    name,
-    style,
-    headline,
-    copy: profiles[category].heroCopy,
-    accent: paletteMatrix[index][categoryIndex],
-    dark: index === 1 ? "#111114" : index === 2 ? "#0b1014" : "#111316",
-    image: imageSets[category][index],
-    layout: layouts[index],
-  })),
+const templates: Template[] = Object.entries(templateWords).flatMap(([category, variants]) =>
+  variants.map(([name, style, headline], index) => {
+    const d = templateDirections[category][index];
+    return { id:`${category.toLowerCase()}-${index+1}`, category, name, style, headline, copy:profiles[category].heroCopy, image:imageSets[category][index], ...d } as Template;
+  }),
 );
 
 const blankTemplate: Template = {
-  id: "free-studio", category: "Freies Projekt", name: "Studio", style: "Freier Builder", headline: "Eine Website, die bei dir beginnt.", copy: freeProfile.heroCopy, accent: "#77aaff", dark: "#111316", image: imageSets.Handwerk[0], layout: "split",
+  id: "free-studio", category: "Freies Projekt", name: "Studio", style: "Freier Builder", headline: "Eine Website, die bei dir beginnt.", copy: freeProfile.heroCopy, accent: "#77aaff", dark: "#111316", image: imageSets.Handwerk[0], layout: "split", surface: "#f3f0e7", text: "#15171a", secondary: "#dbe7ff", font: "modern", buttonStyle: "solid", heroAlign: "left", radius: 20,
 };
 
 const sectionLabels: Record<SectionKind, string> = { hero: "Hero", services: "Leistungen", about: "Über uns", projects: "Referenzen", reviews: "Bewertungen", contact: "Kontakt", cta: "Call-to-Action" };
@@ -485,7 +525,7 @@ export default function JXStudio() {
 
   const chooseTemplate = (template: Template) => {
     const profile = profileFor(template.category);
-    setBuilder((prev) => ({ ...prev, templateId: template.id, templateLayout: template.layout, mode: "template", company: template.name, industry: template.category, accent: template.accent, secondary: `${template.accent}33`, dark: template.dark, pages: pagesFor(profile), customText: {}, content: { kicker: profile.kicker, headline: template.headline, copy: profile.heroCopy, cta: profile.cta, image: template.image } }));
+    setBuilder((prev) => ({ ...prev, templateId: template.id, templateLayout: template.layout, mode: "template", company: template.name, industry: template.category, accent: template.accent, secondary: template.secondary ?? `${template.accent}33`, dark: template.dark, surface: template.surface ?? prev.surface, text: template.text ?? prev.text, font: template.font ?? prev.font, buttonStyle: template.buttonStyle ?? prev.buttonStyle, heroAlign: template.heroAlign ?? prev.heroAlign, radius: template.radius ?? prev.radius, pages: pagesFor(profile), customText: {}, content: { kicker: profile.kicker, headline: template.headline, copy: profile.heroCopy, cta: profile.cta, image: template.image } }));
     setActivePage("home"); setTemplateDialog(null); setView("builder");
     requestAnimationFrame(() => window.scrollTo({ top: 0 }));
   };
@@ -534,7 +574,7 @@ export default function JXStudio() {
         <DialogContent className="template-dialog">
           {templateDialog && (() => {
             const profile = profileFor(templateDialog.category);
-            const tempState: BuilderState = { ...defaultState, templateId: templateDialog.id, company: templateDialog.name, industry: templateDialog.category, accent: templateDialog.accent, dark: templateDialog.dark, pages: pagesFor(profile), content: { kicker: profile.kicker, headline: templateDialog.headline, copy: profile.heroCopy, cta: profile.cta, image: templateDialog.image } };
+            const tempState: BuilderState = { ...defaultState, templateId: templateDialog.id, templateLayout: templateDialog.layout, company: templateDialog.name, industry: templateDialog.category, accent: templateDialog.accent, secondary: templateDialog.secondary ?? defaultState.secondary, dark: templateDialog.dark, surface: templateDialog.surface ?? defaultState.surface, text: templateDialog.text ?? defaultState.text, font: templateDialog.font ?? defaultState.font, buttonStyle: templateDialog.buttonStyle ?? defaultState.buttonStyle, heroAlign: templateDialog.heroAlign ?? defaultState.heroAlign, radius: templateDialog.radius ?? defaultState.radius, pages: pagesFor(profile), content: { kicker: profile.kicker, headline: templateDialog.headline, copy: profile.heroCopy, cta: profile.cta, image: templateDialog.image } };
             const page = tempState.pages.find((item) => item.id === previewPage) ?? tempState.pages[0];
             const phoneDesktop = previewDevice === "desktop" && isPhoneViewport();
             return <>
