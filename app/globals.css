@@ -903,3 +903,61 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 :root{--jx-bg:#090b0e;--jx-panel:#101318;--jx-ink:#f5f3ee;--jx-muted:#9aa2ad;--jx-blue:#8eafe8;--jx-blue-2:#668fd6;--jx-paper:#f2efe8;--jx-paper-2:#e7e2d8;--jx-dark-ink:#15171a;--jx-line:rgba(255,255,255,.105)}
 .jx-header{background:rgba(9,11,14,.9);border-bottom-color:rgba(255,255,255,.075)}.jx-nav .jx-nav-cta{background:#f3f0e9}.btn-primary{background:#8eafe8}.btn-primary:hover{background:#a5c0ed}.builder-page{background:#090b0e}.builder-sidebar{background:#101318}.builder-tabs>[role="tablist"]{background:#0b0e12}.builder-tabs>[role="tablist"] button[data-state="active"]{background:#20252c}.builder-center-tools>button{background:#12161c}.builder-price{background:#0b0e12}.finish-button,.builder-price button{background:#8eafe8}
 .consultation-page{background:#0c0f13;color:#f4f2ed}.consultation-hero{background:radial-gradient(circle at 78% 22%,rgba(142,175,232,.16),transparent 31%),linear-gradient(150deg,#0c0f13,#10151c)}.consultation-hero>div>p{color:#aeb5bf}.consult-card{background:#151a21;border-color:rgba(255,255,255,.11);color:#f5f3ee}.consult-card h3{color:#f5f3ee!important}.consult-card>p{color:#b7bec8!important}.consult-meta span,.consult-note{color:#aab2bd!important}.consultation-process{background:#f2efe8}.checkout-dialog{background:#101318!important}.checkout-choice-grid{gap:14px}.checkout-choice{box-shadow:0 16px 44px rgba(0,0,0,.09)}
+
+/* JX Studio premium rhythm + midnight depth pass */
+:root {
+  --jx-bg: #07101f;
+  --jx-panel: #0b1628;
+  --jx-panel-2: #0e1b30;
+  --jx-line: rgba(151,181,226,.14);
+}
+html, body { background: var(--jx-bg); }
+.jx-header { background: rgba(7,16,31,.88); border-bottom-color: rgba(151,181,226,.12); }
+.dark-section, .studio-demo-section { background: radial-gradient(circle at 82% 12%, rgba(68,126,242,.12), transparent 30%), linear-gradient(160deg,#081326 0%,#0b1729 54%,#07101f 100%); }
+.page-intro { background: radial-gradient(circle at 78% 22%, rgba(117,168,255,.15), transparent 32%), linear-gradient(145deg,#081326,#0b1729 58%,#07101f); }
+.builder-page { background: #07101f; }
+.builder-sidebar, .builder-tabs > [role="tablist"] { background: #0a1424; }
+.canvas-area { background: radial-gradient(circle at 50% 0%, #142744, #07101f 58%); }
+.canvas-frame { background: #081326; }
+
+/* Good defaults first: customers customize a finished composition, not a blank box. */
+.site-preview {
+  --pv-section-gap: clamp(42px, 5.2vw, 86px);
+  --pv-section-y: clamp(88px, 9vw, 144px);
+  --pv-section-x: clamp(24px, 6vw, 96px);
+  --pv-content-gap: clamp(28px, 3.5vw, 58px);
+  background: var(--preview-surface);
+}
+.site-preview section + section { margin-top: var(--pv-section-gap); }
+.pv-services, .pv-projects, .pv-about, .pv-contact { padding-top: var(--pv-section-y); padding-bottom: var(--pv-section-y); padding-left: var(--pv-section-x); padding-right: var(--pv-section-x); }
+.pv-review { padding-top: clamp(100px,11vw,170px); padding-bottom: clamp(100px,11vw,170px); }
+.pv-cta { padding-top: clamp(76px,8vw,120px); padding-bottom: clamp(76px,8vw,120px); padding-left: var(--pv-section-x); padding-right: var(--pv-section-x); }
+.pv-services > div, .pv-projects > div { gap: clamp(16px,2vw,30px); }
+.pv-about, .pv-contact { gap: clamp(48px,7vw,112px); }
+.pv-services h2, .pv-projects h2, .pv-about h2, .pv-contact h2, .pv-cta h2 { margin-bottom: clamp(38px,4.5vw,68px); }
+.pv-image { min-height: clamp(440px,48vw,680px); }
+.pv-contact form { gap: 14px; }
+
+/* Midnight blue with depth for the dark, high-energy template families. */
+.site-preview:not(.layout-atelier):not(.layout-architectural):not(.layout-clinical):not(.layout-brutalist) .pv-hero {
+  background:
+    radial-gradient(circle at 78% 22%, color-mix(in srgb, var(--preview-accent) 18%, transparent), transparent 34%),
+    radial-gradient(circle at 18% 88%, rgba(31,73,125,.24), transparent 38%),
+    linear-gradient(145deg, #07101f 0%, #0b1a30 48%, #081326 100%);
+}
+.site-preview:not(.layout-atelier):not(.layout-architectural):not(.layout-clinical):not(.layout-brutalist) .pv-hero p { color: #bac7d9; }
+.layout-impact .pv-hero:after { background: linear-gradient(90deg,rgba(5,14,28,.94),rgba(7,21,40,.42),rgba(7,16,31,.12)); }
+.layout-performance .pv-hero:after { background: linear-gradient(100deg,rgba(4,13,27,.96) 10%,rgba(7,25,46,.58) 62%,rgba(8,22,40,.18)); }
+.layout-cinematic .pv-hero:after { background: linear-gradient(180deg,rgba(5,14,28,.08),rgba(5,14,28,.88) 92%); }
+.layout-performance .pv-services, .layout-cinematic .pv-services, .pv-review {
+  background: radial-gradient(circle at 82% 18%, color-mix(in srgb,var(--preview-accent) 12%,transparent), transparent 32%), linear-gradient(150deg,#07101f,#0b1a30 58%,#081326);
+}
+
+@media (max-width: 760px) {
+  .site-preview { --pv-section-gap: 28px; --pv-section-y: 72px; --pv-section-x: 24px; }
+  .site-preview.device-mobile .pv-services, .site-preview.device-mobile .pv-projects, .site-preview.device-mobile .pv-about, .site-preview.device-mobile .pv-contact { padding: var(--pv-section-y) var(--pv-section-x); }
+  .site-preview.device-mobile .pv-about, .site-preview.device-mobile .pv-contact { gap: 38px; }
+  .site-preview.device-mobile .pv-image { min-height: 340px; }
+  .site-preview.device-mobile .pv-review { padding: 82px 28px; }
+  .site-preview.device-mobile .pv-cta { padding: 68px 24px; }
+}
