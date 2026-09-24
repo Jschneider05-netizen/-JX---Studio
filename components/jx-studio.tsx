@@ -90,6 +90,8 @@ type Template = {
 
 export type BuilderState = {
   templateId: string;
+  /** Frozen visual layout so Builder and production export cannot diverge. */
+  templateLayout?: TemplateLayout;
   mode: "template" | "free";
   editorMode?: "easy" | "advanced" | "pro";
   company: string;
@@ -314,6 +316,7 @@ function pagesFor(profile: BranchProfile) {
 
 const defaultState: BuilderState = {
   templateId: "handwerk-1",
+  templateLayout: "split",
   mode: "template",
   editorMode: "easy",
   company: "Nordwerk",
@@ -482,13 +485,13 @@ export default function JXStudio() {
 
   const chooseTemplate = (template: Template) => {
     const profile = profileFor(template.category);
-    setBuilder((prev) => ({ ...prev, templateId: template.id, mode: "template", company: template.name, industry: template.category, accent: template.accent, secondary: `${template.accent}33`, dark: template.dark, pages: pagesFor(profile), customText: {}, content: { kicker: profile.kicker, headline: template.headline, copy: profile.heroCopy, cta: profile.cta, image: template.image } }));
+    setBuilder((prev) => ({ ...prev, templateId: template.id, templateLayout: template.layout, mode: "template", company: template.name, industry: template.category, accent: template.accent, secondary: `${template.accent}33`, dark: template.dark, pages: pagesFor(profile), customText: {}, content: { kicker: profile.kicker, headline: template.headline, copy: profile.heroCopy, cta: profile.cta, image: template.image } }));
     setActivePage("home"); setTemplateDialog(null); setView("builder");
     requestAnimationFrame(() => window.scrollTo({ top: 0 }));
   };
 
   const startFree = () => {
-    setBuilder((prev) => ({ ...prev, templateId: blankTemplate.id, mode: "free", company: "Dein Unternehmen", industry: "Freies Projekt", accent: blankTemplate.accent, secondary: "#dbe7ff", dark: blankTemplate.dark, surface: "#f3f0e7", text: "#15171a", pages: pagesFor(freeProfile), customText: {}, content: { kicker: freeProfile.kicker, headline: blankTemplate.headline, copy: freeProfile.heroCopy, cta: freeProfile.cta, image: blankTemplate.image } }));
+    setBuilder((prev) => ({ ...prev, templateId: blankTemplate.id, templateLayout: blankTemplate.layout, mode: "free", company: "Dein Unternehmen", industry: "Freies Projekt", accent: blankTemplate.accent, secondary: "#dbe7ff", dark: blankTemplate.dark, surface: "#f3f0e7", text: "#15171a", pages: pagesFor(freeProfile), customText: {}, content: { kicker: freeProfile.kicker, headline: blankTemplate.headline, copy: freeProfile.heroCopy, cta: freeProfile.cta, image: blankTemplate.image } }));
     setActivePage("home"); setView("builder");
     requestAnimationFrame(() => window.scrollTo({ top: 0 }));
   };
@@ -554,8 +557,13 @@ export default function JXStudio() {
         <DialogContent className="checkout-dialog">
           <div className="checkout-hero"><span className="checkout-kicker"><BadgeCheck size={15}/> Dein JX Projekt</span><DialogHeader><DialogTitle>Von deiner Konfiguration zum fertigen Launch.</DialogTitle></DialogHeader><p>Deine Auswahl bleibt vollständig am Projekt gespeichert. Nach dem Auftrag folgen technischer Build, Qualitätsprüfung, persönliche Finalisierung und deine Freigabe.</p></div>
           <div className="checkout-project"><div><small>PROJEKT</small><b>{builder.company || "Neue Website"}</b><span>{builder.industry} · {builder.pages.length} Seiten · {builder.addons.length} Erweiterungen</span></div><div className="checkout-total"><span>Einmaliger Projektpreis</span><strong>{money(oneTimePrice)}</strong>{builder.care && <small>+ 49,99 € / Monat JX Care</small>}</div></div>
+          <div className="checkout-choice-intro"><b>Wie möchtest du weitermachen?</b><span>Beide Wege übernehmen deine aktuelle Konfiguration vollständig.</span></div>
+          <div className="checkout-choice-grid">
+            <div className="checkout-choice-card primary"><span className="choice-label">OPTION 01 · DIREKT STARTEN</span><h3>Projekt direkt beauftragen</h3><p>Deine Konfiguration passt? Auftrag online auslösen und direkt in den JX Produktionsworkflow starten.</p><DirectCheckout configuration={builder} estimatedPrice={oneTimePrice} /></div>
+            <div className="checkout-choice-card"><span className="choice-label">OPTION 02 · ERST BESPRECHEN</span><h3>Persönlich anfragen & besprechen</h3><p>Noch keine Zahlung. Deine Konfiguration wird mitgesendet und wir gehen sie gemeinsam durch.</p><div className="choice-actions"><button className="btn-primary" onClick={()=>{setCheckoutOpen(false);navigate("consultation")}}><CalendarDays size={16}/> Persönliche Beratung wählen</button><a href="#checkout-inquiry" className="btn-secondary">Unverbindliche Anfrage</a></div></div>
+          </div>
           <div className="checkout-flow"><span><b>01</b> Auftrag</span><i/><span><b>02</b> Build & QA</span><i/><span><b>03</b> Feinschliff</span><i/><span><b>04</b> Launch</span></div>
-          <DirectCheckout configuration={builder} estimatedPrice={oneTimePrice} /><div className="checkout-divider"><span>Noch nicht bereit zu kaufen?</span></div><div className="checkout-consult"><div><CalendarDays/><span><b>Projekt gemeinsam durchgehen</b><small>Wir können deine Konfiguration persönlich prüfen und fertig planen.</small></span></div><button className="btn-secondary" onClick={()=>{setCheckoutOpen(false);navigate("consultation")}}>Termin wählen</button></div><InquiryForm configuration={builder} estimatedPrice={oneTimePrice} onSuccess={() => setCheckoutOpen(false)} compact />
+          <div id="checkout-inquiry" className="checkout-inquiry-section"><div className="checkout-divider"><span>Oder direkt unverbindlich anfragen</span></div><InquiryForm configuration={builder} estimatedPrice={oneTimePrice} onSuccess={() => setCheckoutOpen(false)} compact /></div>
         </DialogContent>
       </Dialog>
     </div>

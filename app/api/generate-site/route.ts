@@ -33,10 +33,16 @@ export async function GET(request: Request) {
   const images: string[] = Array.isArray(c.resolvedImages) ? c.resolvedImages : [];
   const pages = Array.isArray(c.pages) ? c.pages : [];
   const company = esc(c.company || row.company || "Unternehmen");
-  const templateLayout = ["split","editorial","impact"].includes(c.templateLayout) ? c.templateLayout : "split";
+  // Layout is part of the canonical SiteConfig. Older saved projects did not store it,
+  // so derive it deterministically from the template id instead of silently falling back.
+  const templateIndex = Number(String(c.templateId || "").match(/-(\d+)$/)?.[1] || 1) - 1;
+  const derivedLayout = (["split", "editorial", "impact"] as const)[Math.max(0, Math.min(2, templateIndex))] || "split";
+  const templateLayout = ["split","editorial","impact"].includes(c.templateLayout) ? c.templateLayout : derivedLayout;
   const text = (page:any, section:any, field:string, fallback:string) => esc(c.customText?.[`${page.id}:${section.id}:${field}`] ?? fallback);
   const pageHref = (p:any,i:number) => i === 0 ? "index.html" : `${slug(p.id || p.name)}.html`;
   const nav = pages.slice(0,4).map((p:any,i:number)=>`<a class="${i===0?'active':''}" href="${pageHref(p,i)}">${esc(p.name)}</a>`).join("");
+  // The hero uses the exact image selected in the Builder. resolvedImages are only
+  // fallbacks for secondary sections, matching SitePreview.
   const primaryImage = String(c.content?.image || images[0] || "");
 
   const sectionStyle = (s:any) => {
@@ -95,14 +101,14 @@ export async function GET(request: Request) {
     return out;
   })();
 
-  const exportOverrides = `\n/* JX production shell: editor chrome removed, preview renderer unchanged */\nhtml,body{margin:0;background:var(--preview-surface,#fff)}body{min-width:0}.site-preview{min-height:100vh}.preview-nav a{appearance:none;background:none;border:0;color:inherit;text-decoration:none;font:inherit}.pv-button{display:inline-flex;align-items:center;gap:8px;border:1px solid transparent;background:var(--preview-accent);color:#111!important;font:800 10px Inter,sans-serif;padding:12px 15px;border-radius:calc(var(--preview-radius)*.45);margin-top:18px;text-decoration:none}.button-outline .pv-button{background:transparent;border-color:var(--preview-accent);color:var(--preview-accent)!important}.button-soft .pv-button{background:color-mix(in srgb,var(--preview-accent) 26%,transparent);color:color-mix(in srgb,var(--preview-accent) 80%,white)!important}`;
+  const exportOverrides = `\n/* JX production shell: editor chrome removed, preview renderer unchanged */\nhtml,body{margin:0;background:var(--preview-surface,#fff)}body{min-width:0}.site-preview{min-height:100vh}.preview-nav a{appearance:none;background:transparent;border:0;color:color-mix(in srgb,var(--preview-text) 68%,transparent);text-decoration:none;padding:8px 9px;border-radius:7px;font:700 9px Inter,sans-serif}.preview-nav a:hover,.preview-nav a.active{color:var(--preview-text);background:color-mix(in srgb,var(--preview-text) 7%,transparent)}.pv-button{display:inline-flex;align-items:center;gap:8px;border:1px solid transparent;background:var(--preview-accent);color:#111!important;font:800 10px Inter,sans-serif;padding:12px 15px;border-radius:calc(var(--preview-radius)*.45);margin-top:18px;text-decoration:none}.button-outline .pv-button{background:transparent;border-color:var(--preview-accent);color:var(--preview-accent)!important}.button-soft .pv-button{background:color-mix(in srgb,var(--preview-accent) 26%,transparent);color:color-mix(in srgb,var(--preview-accent) 80%,white)!important}`;
 
   const vars = `--preview-accent:${esc(c.accent||"#77aaff")};--preview-secondary:${esc(c.secondary||"#dbe7ff")};--preview-dark:${esc(c.dark||"#111316")};--preview-surface:${esc(c.surface||"#f3f0e7")};--preview-text:${esc(c.text||"#15171a")};--preview-radius:${n(c.radius,20)}px;--preview-space:${n(c.spacing,100)}%;--preview-font:${c.font==="editorial"?"Georgia,serif":c.font==="technical"?"ui-monospace,SFMono-Regular,monospace":"Inter,sans-serif"}`;
   const shellClass = `site-preview layout-${esc(templateLayout)} device-desktop button-${esc(c.buttonStyle||"solid")} hero-${esc(c.heroAlign||"left")}`;
   const files:Record<string,string> = {
     "styles.css": runtimeCss + responsiveOverrides + exportOverrides,
     "jx-configuration.json": JSON.stringify(c,null,2),
-    "README.md": `# ${company}\n\nJX Studio V6 canonical export aus JXS-${id}. Preview und Export verwenden denselben pv-* Runtime/CSS-Vertrag. Keine zweite Design-Engine. Vor Livegang Formulare, Rechtstexte, Assets und externe Integrationen final prüfen.`,
+    "README.md": `# ${company}\n\nJX Studio canonical runtime export aus JXS-${id}. Preview und Export verwenden denselben pv-* Runtime/CSS-Vertrag. Keine zweite Design-Engine. Vor Livegang Formulare, Rechtstexte, Assets und externe Integrationen final prüfen.`,
   };
 
   pages.forEach((p:any,i:number)=>{
