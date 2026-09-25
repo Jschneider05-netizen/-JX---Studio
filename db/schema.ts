@@ -12,6 +12,7 @@ export const inquiries = pgTable("inquiries", {
   estimatedPrice: integer("estimated_price"),
   status: text("status").notNull().default("Neu"),
   source: text("source").notNull().default("contact"),
+  requestId: text("request_id").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

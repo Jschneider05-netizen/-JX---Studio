@@ -1,5 +1,8 @@
 # PROJECT HANDOFF — JX Studio
 
+> Historischer Projektstand. Für den aktuellen Lieferstand und die Launch-Schritte gelten `README.md`, `JX_STUDIO_FINAL_RELEASE.md` und `LAUNCH_CHECKLIST.md`.
+
+
 ## 1. Tech-Stack
 
 - Next.js 16 / React 19

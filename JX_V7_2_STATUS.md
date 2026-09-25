@@ -1,5 +1,8 @@
 # JX Studio V7.2 Production Candidate
 
+> Historischer Projektstand. Für den aktuellen Lieferstand und die Launch-Schritte gelten `README.md`, `JX_STUDIO_FINAL_RELEASE.md` und `LAUNCH_CHECKLIST.md`.
+
+
 Implemented in this pass:
 - Canonical builder/runtime/compiler remains the source of truth.
 - Easy / Advanced / JX Pro editor modes.

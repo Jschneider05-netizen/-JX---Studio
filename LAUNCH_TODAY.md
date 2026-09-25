@@ -1,5 +1,8 @@
 # JX Studio V5 – Launch-Check
 
+> Historischer Projektstand. Für den aktuellen Lieferstand und die Launch-Schritte gelten `README.md`, `JX_STUDIO_FINAL_RELEASE.md` und `LAUNCH_CHECKLIST.md`.
+
+
 ## Lokal
 ```bash
 pnpm install

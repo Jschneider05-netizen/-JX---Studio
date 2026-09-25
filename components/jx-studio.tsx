@@ -32,12 +32,9 @@ import {
   Bot,
   MessageCircle,
   Send,
-  Headphones,
   CalendarDays,
   Clock3,
   Users,
-  CreditCard,
-  ShieldCheck,
   BadgeCheck,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -47,8 +44,13 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster, toast } from "sonner";
+import Link from "next/link";
+import { addonPrices, projectPrice } from "@/lib/pricing";
+import { defaultRequirements, normalizeRequirements, requirementsCompleteness, type RequirementsState } from "@/lib/jx-requirements";
 
 type View = "home" | "templates" | "builder" | "services" | "consultation" | "contact";
+const viewPaths: Record<View, string> = { home:"/", templates:"/templates", builder:"/builder", services:"/leistungen", consultation:"/beratung", contact:"/kontakt" };
+const viewFromPath = (path: string): View => (Object.entries(viewPaths).find(([,url])=>url===path)?.[0] as View | undefined) ?? "home";
 type Device = "desktop" | "laptop" | "tablet" | "mobileLandscape" | "mobile";
 type SectionKind = "hero" | "services" | "about" | "projects" | "reviews" | "contact" | "cta";
 type TemplateLayout = "split" | "editorial" | "impact" | "atelier" | "cinematic" | "architectural" | "performance" | "clinical" | "brutalist";
@@ -56,10 +58,10 @@ type BuilderSetter = React.Dispatch<React.SetStateAction<BuilderState>>;
 
 type SectionStyle = { paddingY?: number; background?: string; color?: string; radius?: number; opacity?: number; blur?: number; scale?: number; rotate?: number; offsetX?: number; offsetY?: number };
 type SectionAnimation = { type?: "none" | "fade" | "slide-up" | "slide-left" | "zoom" | "blur" | "rotate"; duration?: number; delay?: number; easing?: string; repeat?: boolean };
-type SectionConfig = { id: string; kind: SectionKind; hidden?: boolean; style?: SectionStyle; animation?: SectionAnimation; responsive?: Partial<Record<Device, SectionStyle & { hidden?: boolean }>> };
-type PageConfig = { id: string; name: string; sections: SectionConfig[] };
+export type SectionConfig = { id: string; kind: SectionKind; hidden?: boolean; style?: SectionStyle; animation?: SectionAnimation; responsive?: Partial<Record<Device, SectionStyle & { hidden?: boolean }>> };
+export type PageConfig = { id: string; name: string; sections: SectionConfig[] };
 
-type BranchProfile = {
+export type BranchProfile = {
   category: string;
   kicker: string;
   heroCopy: string;
@@ -102,6 +104,7 @@ export type BuilderState = {
   mode: "template" | "free";
   editorMode?: "easy" | "advanced" | "pro";
   company: string;
+  contactEmail?: string;
   industry: string;
   accent: string;
   secondary: string;
@@ -123,6 +126,7 @@ export type BuilderState = {
   /** Canonical snapshot used by preview + production export. */
   resolvedContent?: BranchProfile;
   resolvedImages?: string[];
+  requirements?: RequirementsState;
 };
 
 const categories = ["Alle", "Handwerk", "Beauty", "Gastronomie", "Immobilien", "Fitness", "Automotive", "Reinigung", "Praxis", "Tattoo"];
@@ -301,7 +305,6 @@ const blankTemplate: Template = {
 };
 
 const sectionLabels: Record<SectionKind, string> = { hero: "Hero", services: "Leistungen", about: "Über uns", projects: "Referenzen", reviews: "Bewertungen", contact: "Kontakt", cta: "Call-to-Action" };
-const addonPrices: Record<string, number> = { shop: 900, booking: 350, blog: 250, languages: 280, copy: 320, seo: 290, portal: 1200, analytics: 190, ai: 690, domain: 99, deployment: 149 };
 const addonLabels: Record<string, string> = { shop: "Online-Shop", booking: "Terminbuchung", blog: "Blog / News", languages: "Zweite Sprache", copy: "Professionelle Texte", seo: "SEO Pro Setup", portal: "Kundenportal", analytics: "Tracking & Analytics", ai: "KI-Support & Lead-Chatbot", domain: "Domain & DNS einrichten", deployment: "Hosting & Live-Schaltung" };
 
 const industryModules: Record<string, { key: string; title: string; copy: string }[]> = {
@@ -360,6 +363,7 @@ const defaultState: BuilderState = {
   mode: "template",
   editorMode: "easy",
   company: "Nordwerk",
+  contactEmail: "",
   industry: "Handwerk",
   accent: "#77aaff",
   secondary: "#dbe7ff",
@@ -373,6 +377,7 @@ const defaultState: BuilderState = {
   heroAlign: "left",
   pages: pagesFor(profiles.Handwerk),
   addons: [],
+  requirements: defaultRequirements(),
   care: true,
   rush: false,
   content: { kicker: profiles.Handwerk.kicker, headline: templates[0].headline, copy: profiles.Handwerk.heroCopy, cta: profiles.Handwerk.cta, image: imageSets.Handwerk[0] },
@@ -405,6 +410,7 @@ function normaliseBuilder(raw: Partial<BuilderState>): BuilderState {
             hidden: Boolean(section.hidden),
             style: section.style ?? {},
             animation,
+            responsive: section.responsive ?? {},
           };
         })
       : [],
@@ -415,11 +421,12 @@ function normaliseBuilder(raw: Partial<BuilderState>): BuilderState {
     pages,
     content: { ...defaultState.content, ...(raw.content ?? {}) },
     customText: raw.customText ?? {},
+    requirements: normalizeRequirements(raw.requirements),
   };
 }
 
-export default function JXStudio() {
-  const [view, setView] = useState<View>("home");
+export default function JXStudio({ initialView = "home" }: { initialView?: View }) {
+  const [view, setView] = useState<View>(initialView);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [filter, setFilter] = useState("Alle");
   const [builder, setBuilderRaw] = useState<BuilderState>(defaultState);
@@ -435,6 +442,8 @@ export default function JXStudio() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const history = useRef<BuilderState[]>([]);
   const future = useRef<BuilderState[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   const setBuilder = useCallback<BuilderSetter>((updater) => {
     setBuilderRaw((previous) => {
@@ -444,11 +453,15 @@ export default function JXStudio() {
       future.current = [];
       return next;
     });
+    setCanUndo(true);
+    setCanRedo(false);
   }, []);
 
   const undo = useCallback(() => {
     const previous = history.current.pop();
     if (!previous) return;
+    setCanUndo(history.current.length > 0);
+    setCanRedo(true);
     setBuilderRaw((current) => {
       future.current = [current, ...future.current].slice(0, 50);
       return previous;
@@ -458,6 +471,8 @@ export default function JXStudio() {
   const redo = useCallback(() => {
     const next = future.current.shift();
     if (!next) return;
+    setCanUndo(true);
+    setCanRedo(future.current.length > 0);
     setBuilderRaw((current) => {
       history.current = [...history.current.slice(-49), current];
       return next;
@@ -467,10 +482,16 @@ export default function JXStudio() {
   useEffect(() => {
     const saved = localStorage.getItem("jx-studio-builder-v3") ?? localStorage.getItem("jx-studio-builder-v1");
     if (saved) {
-      try { setBuilderRaw(normaliseBuilder(JSON.parse(saved) as Partial<BuilderState>)); } catch { /* ignore damaged drafts */ }
+      try { const restored=normaliseBuilder(JSON.parse(saved) as Partial<BuilderState>); queueMicrotask(()=>setBuilderRaw(restored)); } catch { /* ignore damaged drafts */ }
     }
     const phone = isPhoneViewport();
-    if (phone) { setDevice("mobile"); setPreviewDevice("mobile"); }
+    if (phone) queueMicrotask(()=>{setDevice("mobile");setPreviewDevice("mobile");});
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => setView(viewFromPath(window.location.pathname));
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   useEffect(() => {
@@ -510,29 +531,25 @@ export default function JXStudio() {
 
   const selectedTemplate = builder.templateId === blankTemplate.id ? blankTemplate : templates.find((item) => item.id === builder.templateId) ?? templates[0];
   const currentPage = builder.pages.find((page) => page.id === activePage) ?? builder.pages[0];
-  const oneTimePrice = useMemo(() => {
-    const extraPages = Math.max(0, builder.pages.length - 5) * 120;
-    const addons = builder.addons.reduce((sum, key) => sum + (addonPrices[key] ?? 0), 0);
-    const base = builder.mode === "free" ? 1099 : 799;
-    const subtotal = base + extraPages + addons;
-    return builder.rush ? Math.round(subtotal * 1.2) : subtotal;
-  }, [builder]);
+  const oneTimePrice = useMemo(() => projectPrice(builder), [builder]);
+  const projectCompletion = useMemo(() => requirementsCompleteness(builder), [builder]);
 
   const navigate = (next: View) => {
     setView(next); setMobileMenu(false);
+    if (window.location.pathname !== viewPaths[next]) window.history.pushState({ view: next }, "", viewPaths[next]);
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   };
 
   const chooseTemplate = (template: Template) => {
     const profile = profileFor(template.category);
     setBuilder((prev) => ({ ...prev, templateId: template.id, templateLayout: template.layout, mode: "template", company: template.name, industry: template.category, accent: template.accent, secondary: template.secondary ?? `${template.accent}33`, dark: template.dark, surface: template.surface ?? prev.surface, text: template.text ?? prev.text, font: template.font ?? prev.font, buttonStyle: template.buttonStyle ?? prev.buttonStyle, heroAlign: template.heroAlign ?? prev.heroAlign, radius: template.radius ?? prev.radius, pages: pagesFor(profile), customText: {}, content: { kicker: profile.kicker, headline: template.headline, copy: profile.heroCopy, cta: profile.cta, image: template.image } }));
-    setActivePage("home"); setTemplateDialog(null); setView("builder");
+    setActivePage("home"); setTemplateDialog(null); navigate("builder");
     requestAnimationFrame(() => window.scrollTo({ top: 0 }));
   };
 
   const startFree = () => {
     setBuilder((prev) => ({ ...prev, templateId: blankTemplate.id, templateLayout: blankTemplate.layout, mode: "free", company: "Dein Unternehmen", industry: "Freies Projekt", accent: blankTemplate.accent, secondary: "#dbe7ff", dark: blankTemplate.dark, surface: "#f3f0e7", text: "#15171a", pages: pagesFor(freeProfile), customText: {}, content: { kicker: freeProfile.kicker, headline: blankTemplate.headline, copy: freeProfile.heroCopy, cta: freeProfile.cta, image: blankTemplate.image } }));
-    setActivePage("home"); setView("builder");
+    setActivePage("home"); navigate("builder");
     requestAnimationFrame(() => window.scrollTo({ top: 0 }));
   };
 
@@ -564,7 +581,7 @@ export default function JXStudio() {
       {view === "services" && <ServicesPage navigate={navigate} />}
       {view === "consultation" && <ConsultationPage navigate={navigate} />}
       {view === "contact" && <ContactPage />}
-      {view === "builder" && <BuilderPage builder={builder} setBuilder={setBuilder} currentPage={currentPage} activePage={activePage} setActivePage={setActivePage} device={device} setDevice={setDevice} tab={builderTab} setTab={setBuilderTab} selectedTemplate={selectedTemplate} price={oneTimePrice} openCheckout={() => setCheckoutOpen(true)} openTemplates={() => navigate("templates")} undo={undo} redo={redo} canUndo={history.current.length > 0} canRedo={future.current.length > 0} savedAt={savedAt} />}
+      {view === "builder" && <BuilderPage builder={builder} setBuilder={setBuilder} currentPage={currentPage} activePage={activePage} setActivePage={setActivePage} device={device} setDevice={setDevice} tab={builderTab} setTab={setBuilderTab} selectedTemplate={selectedTemplate} price={oneTimePrice} openCheckout={() => setCheckoutOpen(true)} openTemplates={() => navigate("templates")} undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} savedAt={savedAt} />}
 
       {view !== "builder" && <Footer navigate={navigate} />}
       {view !== "builder" && <JXAssistant navigate={navigate} />}
@@ -597,9 +614,9 @@ export default function JXStudio() {
         <DialogContent className="checkout-dialog">
           <div className="checkout-hero"><span className="checkout-kicker"><BadgeCheck size={15}/> Dein JX Projekt</span><DialogHeader><DialogTitle>Von deiner Konfiguration zum fertigen Launch.</DialogTitle></DialogHeader><p>Deine Auswahl bleibt vollständig am Projekt gespeichert. Nach dem Auftrag folgen technischer Build, Qualitätsprüfung, persönliche Finalisierung und deine Freigabe.</p></div>
           <div className="checkout-project"><div><small>PROJEKT</small><b>{builder.company || "Neue Website"}</b><span>{builder.industry} · {builder.pages.length} Seiten · {builder.addons.length} Erweiterungen</span></div><div className="checkout-total"><span>Einmaliger Projektpreis</span><strong>{money(oneTimePrice)}</strong>{builder.care && <small>+ 49,99 € / Monat JX Care</small>}</div></div>
-          <div className="checkout-choice-intro"><b>Wie möchtest du weitermachen?</b><span>Beide Wege übernehmen deine aktuelle Konfiguration vollständig.</span></div>
+          <div className="checkout-readiness"><div><b>Projektangaben {projectCompletion.percent}% vollständig</b><span>{projectCompletion.ready ? "Alle Pflichtangaben sind vorhanden." : `${projectCompletion.missing.length} Pflichtangaben fehlen noch.`}</span></div>{!projectCompletion.ready&&<ul>{projectCompletion.missing.slice(0,6).map(item=><li key={item}>{item}</li>)}</ul>}{projectCompletion.requiresQuote&&<p>Mindestens eine individuell kalkulierte Branchenfunktion ist gewählt. Dafür ist vor der Zahlung eine persönliche Preisprüfung nötig.</p>}</div><div className="checkout-choice-intro"><b>Wie möchtest du weitermachen?</b><span>Beide Wege übernehmen deine aktuelle Konfiguration vollständig.</span></div>
           <div className="checkout-choice-grid">
-            <div className="checkout-choice-card primary"><span className="choice-label">OPTION 01 · DIREKT STARTEN</span><h3>Projekt direkt beauftragen</h3><p>Deine Konfiguration passt? Auftrag online auslösen und direkt in den JX Produktionsworkflow starten.</p><DirectCheckout configuration={builder} estimatedPrice={oneTimePrice} /></div>
+            <div className="checkout-choice-card primary"><span className="choice-label">OPTION 01 · DIREKT STARTEN</span><h3>Projekt direkt beauftragen</h3><p>Deine Konfiguration passt? Auftrag online auslösen und direkt in den JX Produktionsworkflow starten.</p><DirectCheckout configuration={builder} estimatedPrice={oneTimePrice} blocked={!projectCompletion.ready || projectCompletion.requiresQuote} blockedReason={!projectCompletion.ready ? "Vervollständige zuerst die oben genannten Pflichtangaben." : projectCompletion.requiresQuote ? "Individuelle Branchenmodule werden vor der Zahlung persönlich kalkuliert." : ""} /></div>
             <div className="checkout-choice-card"><span className="choice-label">OPTION 02 · ERST BESPRECHEN</span><h3>Persönlich anfragen & besprechen</h3><p>Noch keine Zahlung. Deine Konfiguration wird mitgesendet und wir gehen sie gemeinsam durch.</p><div className="choice-actions"><button className="btn-primary" onClick={()=>{setCheckoutOpen(false);navigate("consultation")}}><CalendarDays size={16}/> Persönliche Beratung wählen</button><a href="#checkout-inquiry" className="btn-secondary">Unverbindliche Anfrage</a></div></div>
           </div>
           <div className="checkout-flow"><span><b>01</b> Auftrag</span><i/><span><b>02</b> Build & QA</span><i/><span><b>03</b> Feinschliff</span><i/><span><b>04</b> Launch</span></div>
@@ -639,7 +656,7 @@ function CountUp({ value, prefix = "", suffix = "" }: { value: number; prefix?: 
 }
 
 type ChatMessage = { role: "assistant" | "user"; text: string };
-type LeadDraft = { name?:string; email?:string; phone?:string; company?:string; projectType?:string; goals?:string[]; features?:string[]; budget?:string; timeframe?:string; summary?:string; completeness?:number };
+type LeadDraft = { name?:string; email?:string; phone?:string; company?:string; location?:string; projectType?:string; goals?:string[]; features?:string[]; budget?:string; timeframe?:string; summary?:string; completeness?:number };
 
 function JXAssistant({ navigate }: { navigate: (view: View) => void }) {
   const [open, setOpen] = useState(false);
@@ -651,6 +668,7 @@ function JXAssistant({ navigate }: { navigate: (view: View) => void }) {
   const [lead, setLead] = useState<LeadDraft>({});
   const [messages, setMessages] = useState<ChatMessage[]>([{ role: "assistant", text: "Hi, ich bin der JX Assistant. Erzähl mir einfach, was du vorhast. Ich kann dich zu Websites, Shops, Software, KI-Chatbots, Preisen und dem JX Builder beraten und aus unserem Gespräch direkt eine Projektanfrage vorbereiten." }]);
   const scroller = useRef<HTMLDivElement>(null);
+  const leadRequestId = useRef<string | null>(null);
   useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" }); }, [messages, typing, handoff]);
 
   const send = async (preset?: string) => {
@@ -679,11 +697,13 @@ function JXAssistant({ navigate }: { navigate: (view: View) => void }) {
   };
 
   const submitLead = async () => {
+    if (submitting) return;
+    leadRequestId.current ??= crypto.randomUUID();
     setSubmitting(true);
     try {
       const transcript = messages.slice(-12).map(m=>`${m.role === "user" ? "Interessent" : "JX Assistant"}: ${m.text}`).join("\n\n");
-      const summary = lead.summary || `Projektart: ${lead.projectType || "offen"}. Budget: ${lead.budget || "nicht genannt"}. Zeitraum: ${lead.timeframe || "nicht genannt"}.`;
-      const res = await fetch("/api/contact", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ source:"jx-assistant", name:lead.name, email:lead.email, phone:lead.phone||"", company:lead.company||"", subject:`KI-qualifizierte Projektanfrage · ${lead.projectType || "Projekt"}`, message:`${summary}\n\nVom JX Assistant erfasste Angaben:\nZiele: ${(lead.goals||[]).join(", ") || "–"}\nFunktionen: ${(lead.features||[]).join(", ") || "–"}\nBudget: ${lead.budget||"–"}\nZeitraum: ${lead.timeframe||"–"}\n\nGesprächsauszug:\n${transcript}`, configuration:{source:"jx-assistant", lead}, estimatedPrice:null }) });
+      const summary = lead.summary || `Projektart: ${lead.projectType || "offen"}. Standort: ${lead.location || "nicht genannt"}. Budget: ${lead.budget || "nicht genannt"}. Zeitraum: ${lead.timeframe || "nicht genannt"}.`;
+      const res = await fetch("/api/contact", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ requestId:leadRequestId.current, source:"jx-assistant", name:lead.name, email:lead.email, phone:lead.phone||"", company:lead.company||"", subject:`KI-qualifizierte Projektanfrage · ${lead.projectType || "Projekt"}`, message:`${summary}\n\nVom JX Assistant erfasste Angaben:\nStandort: ${lead.location||"–"}\nZiele: ${(lead.goals||[]).join(", ") || "–"}\nFunktionen: ${(lead.features||[]).join(", ") || "–"}\nBudget: ${lead.budget||"–"}\nZeitraum: ${lead.timeframe||"–"}\n\nGesprächsauszug:\n${transcript}`, configuration:{source:"jx-assistant", lead}, estimatedPrice:null }) });
       const data = await res.json() as { error?: string; reference?: string };
       if (!res.ok) throw new Error(data.error || "Versand fehlgeschlagen");
       setHandoff(false); setConfirmLead(false);
@@ -695,7 +715,7 @@ function JXAssistant({ navigate }: { navigate: (view: View) => void }) {
   return <div className={`jx-assistant ${open ? "open" : ""}`}>
     {open && <div className="assistant-panel" role="dialog" aria-label="JX Assistant">
       <div className="assistant-head"><div><span className="assistant-mark"><Bot size={18}/></span><span><b>JX Assistant</b><small><i/> Digitaler Projektberater</small></span></div><button onClick={() => setOpen(false)} aria-label="Chat schließen"><X size={18}/></button></div>
-      <div className="assistant-messages" ref={scroller}>{messages.map((m,i)=><div key={i} className={`assistant-message ${m.role}`}>{m.text}</div>)}{typing&&<div className="assistant-message assistant typing"><span/><span/><span/><em>tippt</em></div>}{handoff&&!typing&&<div className="assistant-handoff"><b>Das klingt bereits konkret.</b><span>Ich habe genug Informationen, um daraus eine Projektanfrage zu machen. Möchtest du, dass ich sie direkt an den Projektleiter weitergebe?</span><div><button onClick={prepareLead}>Anfrage weitergeben</button><button onClick={()=>setHandoff(false)}>Noch etwas besprechen</button></div></div>}{confirmLead&&!typing&&<div className="assistant-handoff assistant-confirm"><b>Projektanfrage prüfen</b><span><strong>{lead.projectType||"Digitalprojekt"}</strong>{lead.company?` · ${lead.company}`:""}</span><span>Budget: {lead.budget||"nicht genannt"} · Zeitraum: {lead.timeframe||"nicht genannt"}</span><span>Funktionen: {(lead.features||[]).join(", ")||"noch offen"}</span><span>Kontakt: {lead.name} · {lead.email}{lead.phone?` · ${lead.phone}`:""}</span><small>Erst mit „Anfrage verbindlich senden“ werden diese Angaben an JX Studio übermittelt.</small><div><button onClick={submitLead} disabled={submitting}>{submitting?"Wird gesendet…":"Anfrage verbindlich senden"}</button><button onClick={()=>setConfirmLead(false)}>Zurück zum Chat</button></div></div>}</div>
+      <div className="assistant-messages" ref={scroller}>{messages.map((m,i)=><div key={i} className={`assistant-message ${m.role}`}>{m.text}</div>)}{typing&&<div className="assistant-message assistant typing"><span/><span/><span/><em>tippt</em></div>}{handoff&&!typing&&<div className="assistant-handoff"><b>Das klingt bereits konkret.</b><span>Ich habe genug Informationen, um daraus eine Projektanfrage zu machen. Möchtest du, dass ich sie direkt an den Projektleiter weitergebe?</span><div><button onClick={prepareLead}>Anfrage weitergeben</button><button onClick={()=>setHandoff(false)}>Noch etwas besprechen</button></div></div>}{confirmLead&&!typing&&<div className="assistant-handoff assistant-confirm"><b>Projektanfrage prüfen</b><span><strong>{lead.projectType||"Digitalprojekt"}</strong>{lead.company?` · ${lead.company}`:""}{lead.location?` · ${lead.location}`:""}</span><span>Budget: {lead.budget||"nicht genannt"} · Zeitraum: {lead.timeframe||"nicht genannt"}</span><span>Funktionen: {(lead.features||[]).join(", ")||"noch offen"}</span><span>Kontakt: {lead.name} · {lead.email}{lead.phone?` · ${lead.phone}`:""}</span><small>Erst mit „Anfrage verbindlich senden“ werden diese Angaben an JX Studio übermittelt.</small><div><button onClick={submitLead} disabled={submitting}>{submitting?"Wird gesendet…":"Anfrage verbindlich senden"}</button><button onClick={()=>setConfirmLead(false)}>Zurück zum Chat</button></div></div>}</div>
       <div className="assistant-quick"><button onClick={()=>send("Was kostet eine professionelle Website bei euch?")}>Preise</button><button onClick={()=>send("Was kann euer KI-Chatbot für mein Unternehmen?")}>KI-Chatbot</button><button onClick={()=>send("Ich möchte ein Projekt planen. Welche Infos brauchst du von mir?")}>Projekt planen</button><button onClick={()=>{setOpen(false);navigate("builder")}}>Builder öffnen</button></div>
       <div className="assistant-input"><input value={input} disabled={typing} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={typing?"JX Assistant tippt…":"Nachricht schreiben…"} aria-label="Nachricht"/><button disabled={typing} onClick={()=>send()} aria-label="Senden"><Send size={17}/></button></div>
       <small className="assistant-note">KI-Assistent · Antworten können Fehler enthalten · Angebote werden persönlich geprüft.</small>
@@ -835,6 +855,61 @@ function ServicesPage({ navigate }: { navigate: (view: View) => void }) {
   return <main className="page-main"><section className="page-intro"><span className="eyebrow"><Code2 size={14} /> Leistungen</span><h1>Website ist nur<br /><em>der Anfang.</em></h1><p>JX Studio verbindet Design und Entwicklung. Damit kann aus einer Landingpage später genauso ein Kundenportal oder digitales System werden.</p></section><section className="full-service-list">{services.map((service, index) => <article key={service.name}><span className="service-number">0{index + 1}</span><span className="service-icon">{service.icon}</span><div className="service-main"><h2>{service.name}</h2><p>{service.description}</p></div><ul>{service.details.map((detail) => <li key={detail}><Check /> {detail}</li>)}</ul><strong>{service.price}</strong></article>)}</section><section className="service-end"><h2>Du weißt noch nicht, welche Lösung passt?</h2><button className="btn-primary" onClick={() => navigate("contact")}>Projekt kurz beschreiben <ArrowRight /></button></section></main>;
 }
 
+
+function RequirementsPanel({ builder, setBuilder }: { builder: BuilderState; setBuilder: BuilderSetter }) {
+  const req = normalizeRequirements(builder.requirements);
+  const update = (patch: Partial<RequirementsState>) => setBuilder(prev => ({ ...prev, requirements: { ...normalizeRequirements(prev.requirements), ...patch } }));
+  const updateBusiness = (patch: Partial<RequirementsState["business"]>) => update({ business: { ...req.business, ...patch } });
+  const updateDomain = (patch: Partial<RequirementsState["domain"]>) => update({ domain: { ...req.domain, ...patch } });
+  const updateContact = (patch: Partial<RequirementsState["contactForm"]>) => update({ contactForm: { ...req.contactForm, ...patch } });
+  const updateAppointments = (patch: Partial<RequirementsState["appointments"]>) => update({ appointments: { ...req.appointments, ...patch } });
+  const updateMenu = (patch: Partial<RequirementsState["restaurantMenu"]>) => update({ restaurantMenu: { ...req.restaurantMenu, ...patch } });
+  const completion = requirementsCompleteness(builder);
+  const fieldLabels: Record<string,string> = { name:"Name", email:"E-Mail", phone:"Telefon", company:"Unternehmen", subject:"Betreff", message:"Nachricht" };
+  const availableFields = Object.keys(fieldLabels);
+  const addService = () => updateAppointments({ services:[...req.appointments.services,{id:newId("service"),name:"Neue Leistung",durationMinutes:45,price:""}] });
+  const addCategory = () => updateMenu({ categories:[...req.restaurantMenu.categories,{id:newId("category"),name:"Neue Kategorie",items:[]}] });
+  return <div className="requirements-panel">
+    <div className="requirements-progress"><div><b>Projektangaben</b><small>{completion.percent}% vollständig</small></div><div className="requirements-progress-track"><i style={{width:`${completion.percent}%`}}/></div>{completion.missing.length>0&&<small>Noch erforderlich: {completion.missing.slice(0,3).join(" · ")}{completion.missing.length>3?` · +${completion.missing.length-3}`:""}</small>}</div>
+
+    <details open><summary>Unternehmen & Kontakt</summary><div className="requirements-grid">
+      <label>Unternehmensname<input value={builder.company} onChange={e=>setBuilder(prev=>({...prev,company:e.target.value}))}/></label>
+      <label>Ansprechpartner *<input value={req.business.contactName} onChange={e=>updateBusiness({contactName:e.target.value})}/></label>
+      <label>E-Mail *<input type="email" value={req.business.email} onChange={e=>{updateBusiness({email:e.target.value});setBuilder(prev=>({...prev,contactEmail:e.target.value}))}}/></label>
+      <label>Telefon *<input type="tel" value={req.business.phone} onChange={e=>updateBusiness({phone:e.target.value})}/></label>
+      <label>Adresse<input value={req.business.address} onChange={e=>updateBusiness({address:e.target.value})}/></label>
+      <label>PLZ<input value={req.business.postalCode} onChange={e=>updateBusiness({postalCode:e.target.value})}/></label>
+      <label>Ort<input value={req.business.city} onChange={e=>updateBusiness({city:e.target.value})}/></label>
+      <label>WhatsApp<input value={req.business.whatsapp} onChange={e=>updateBusiness({whatsapp:e.target.value})}/></label>
+      <label className="full">Öffnungszeiten<textarea rows={2} value={req.business.openingHours} onChange={e=>updateBusiness({openingHours:e.target.value})}/></label>
+    </div></details>
+
+    <details><summary>Kontaktformular</summary><div className="requirement-body"><div className="switch-row"><div><b>Kontaktformular verwenden</b><small>Empfänger und Formularfelder exakt festlegen.</small></div><Switch checked={req.contactForm.enabled} onCheckedChange={enabled=>updateContact({enabled})}/></div>{req.contactForm.enabled&&<>
+      <label className="input-label">Empfänger-E-Mail *<input type="email" value={req.contactForm.recipientEmail} placeholder="anfragen@firma.de" onChange={e=>updateContact({recipientEmail:e.target.value})}/></label>
+      <div className="requirement-checks">{availableFields.map(field=><label key={field}><Checkbox checked={req.contactForm.fields.includes(field)} onCheckedChange={checked=>{const fields=checked?[...req.contactForm.fields,field]:req.contactForm.fields.filter(x=>x!==field);const requiredFields=req.contactForm.requiredFields.filter(x=>fields.includes(x));updateContact({fields,requiredFields})}}/><span>{fieldLabels[field]}</span><small><input type="checkbox" aria-label={`${fieldLabels[field]} als Pflichtfeld`} disabled={!req.contactForm.fields.includes(field)} checked={req.contactForm.requiredFields.includes(field)} onChange={e=>updateContact({requiredFields:e.target.checked?[...new Set([...req.contactForm.requiredFields,field])]:req.contactForm.requiredFields.filter(x=>x!==field)})}/> Pflicht</small></label>)}</div>
+      <label className="input-label">Erfolgsmeldung<input value={req.contactForm.successMessage} onChange={e=>updateContact({successMessage:e.target.value})}/></label>
+      <label className="input-label">Position<select value={req.contactForm.placement} onChange={e=>updateContact({placement:e.target.value as typeof req.contactForm.placement})}><option value="contact">Kontaktseite</option><option value="home">Startseite</option><option value="both">Startseite + Kontaktseite</option></select></label>
+      <div className="switch-row"><div><b>Bestätigung an Kunden</b><small>Bestätigungs-Mail nach erfolgreichem Versand.</small></div><Switch checked={req.contactForm.confirmationEmail} onCheckedChange={confirmationEmail=>updateContact({confirmationEmail})}/></div>
+    </>}</div></details>
+
+    <details><summary>Terminbuchung</summary><div className="requirement-body"><div className="switch-row"><div><b>Termine online erfassen</b><small>Leistungen, Dauer, Verfügbarkeit und Empfänger.</small></div><Switch checked={req.appointments.enabled} onCheckedChange={enabled=>updateAppointments({enabled})}/></div>{req.appointments.enabled&&<>
+      <label className="input-label">Empfänger-E-Mail *<input type="email" value={req.appointments.recipientEmail} onChange={e=>updateAppointments({recipientEmail:e.target.value})}/></label>
+      <label className="input-label">Reguläre Verfügbarkeit *<textarea rows={2} value={req.appointments.weeklyHours} onChange={e=>updateAppointments({weeklyHours:e.target.value})}/></label>
+      <div className="requirement-inline"><label>Puffer (Min.)<input type="number" min="0" value={req.appointments.bufferMinutes} onChange={e=>updateAppointments({bufferMinutes:Number(e.target.value)})}/></label><label>Vorlauf (Std.)<input type="number" min="0" value={req.appointments.leadTimeHours} onChange={e=>updateAppointments({leadTimeHours:Number(e.target.value)})}/></label><label>Storno vorher (Std.)<input type="number" min="0" value={req.appointments.cancellationHours} onChange={e=>updateAppointments({cancellationHours:Number(e.target.value)})}/></label></div>
+      <div className="module-heading"><b>Leistungen</b><button type="button" onClick={addService}><Plus size={13}/> Leistung</button></div>
+      {req.appointments.services.map(service=><div className="requirement-row" key={service.id}><input aria-label="Leistungsname" value={service.name} onChange={e=>updateAppointments({services:req.appointments.services.map(s=>s.id===service.id?{...s,name:e.target.value}:s)})}/><input aria-label="Dauer" type="number" min="5" step="5" value={service.durationMinutes} onChange={e=>updateAppointments({services:req.appointments.services.map(s=>s.id===service.id?{...s,durationMinutes:Number(e.target.value)}:s)})}/><input aria-label="Preis" placeholder="z. B. 49 €" value={service.price} onChange={e=>updateAppointments({services:req.appointments.services.map(s=>s.id===service.id?{...s,price:e.target.value}:s)})}/><button type="button" aria-label="Leistung löschen" onClick={()=>updateAppointments({services:req.appointments.services.filter(s=>s.id!==service.id)})}><Trash2 size={14}/></button></div>)}
+      <label className="input-label">Mitarbeiter (kommagetrennt)<input value={req.appointments.staff.join(", ")} onChange={e=>updateAppointments({staff:e.target.value.split(",").map(v=>v.trim()).filter(Boolean)})}/></label><label className="input-label">Buchung anzeigen<select value={req.appointments.placement} onChange={e=>updateAppointments({placement:e.target.value as typeof req.appointments.placement})}><option value="page">Kontakt-/Terminseite</option><option value="home">Startseite</option><option value="both">Startseite + Kontakt</option></select></label>
+    </>}</div></details>
+
+    {builder.industry==="Gastronomie"&&<details><summary>Digitale Speisekarte</summary><div className="requirement-body"><div className="switch-row"><div><b>Speisekarte konfigurieren</b><small>Kategorien, Gerichte, Preise und Allergene werden mit dem Auftrag gespeichert.</small></div><Switch checked={req.restaurantMenu.enabled} onCheckedChange={enabled=>updateMenu({enabled})}/></div>{req.restaurantMenu.enabled&&<>
+      <div className="module-heading"><b>Kategorien & Gerichte</b><button type="button" onClick={addCategory}><Plus size={13}/> Kategorie</button></div>
+      {req.restaurantMenu.categories.map(category=><div className="menu-category-editor" key={category.id}><div className="requirement-row"><input value={category.name} onChange={e=>updateMenu({categories:req.restaurantMenu.categories.map(c=>c.id===category.id?{...c,name:e.target.value}:c)})}/><button type="button" onClick={()=>{const item={id:newId("dish"),name:"Neues Gericht",description:"",price:"",allergens:"",tags:"",available:true};updateMenu({categories:req.restaurantMenu.categories.map(c=>c.id===category.id?{...c,items:[...c.items,item]}:c)})}}><Plus size={13}/> Gericht</button><button type="button" onClick={()=>updateMenu({categories:req.restaurantMenu.categories.filter(c=>c.id!==category.id)})}><Trash2 size={14}/></button></div>{category.items.map(item=><div className="menu-item-editor" key={item.id}><input placeholder="Gericht" value={item.name} onChange={e=>updateMenu({categories:req.restaurantMenu.categories.map(c=>c.id===category.id?{...c,items:c.items.map(i=>i.id===item.id?{...i,name:e.target.value}:i)}:c)})}/><input placeholder="Preis" value={item.price} onChange={e=>updateMenu({categories:req.restaurantMenu.categories.map(c=>c.id===category.id?{...c,items:c.items.map(i=>i.id===item.id?{...i,price:e.target.value}:i)}:c)})}/><input placeholder="Beschreibung" value={item.description} onChange={e=>updateMenu({categories:req.restaurantMenu.categories.map(c=>c.id===category.id?{...c,items:c.items.map(i=>i.id===item.id?{...i,description:e.target.value}:i)}:c)})}/><input placeholder="Allergene" value={item.allergens} onChange={e=>updateMenu({categories:req.restaurantMenu.categories.map(c=>c.id===category.id?{...c,items:c.items.map(i=>i.id===item.id?{...i,allergens:e.target.value}:i)}:c)})}/><button type="button" onClick={()=>updateMenu({categories:req.restaurantMenu.categories.map(c=>c.id===category.id?{...c,items:c.items.filter(i=>i.id!==item.id)}:c)})}><Trash2 size={14}/></button></div>)}</div>)}<label className="input-label">Speisekarte anzeigen<select value={req.restaurantMenu.placement} onChange={e=>updateMenu({placement:e.target.value as typeof req.restaurantMenu.placement})}><option value="page">Leistungs-/Menüseite</option><option value="home">Startseite</option><option value="both">Startseite + Menüseite</option></select></label>
+    </>}</div></details>}
+
+    <details><summary>Domain & Inhalte</summary><div className="requirements-grid"><label>Domain-Status<select value={req.domain.status} onChange={e=>updateDomain({status:e.target.value as typeof req.domain.status})}><option value="undecided">Noch unklar</option><option value="existing">Domain vorhanden</option><option value="needed">Neue Domain benötigt</option></select></label>{req.domain.status==="existing"&&<><label>Domain *<input value={req.domain.domainName} onChange={e=>updateDomain({domainName:e.target.value})}/></label><label>Provider<input value={req.domain.provider} onChange={e=>updateDomain({provider:e.target.value})}/></label></>}<label>Texte<select value={req.contentPlan.texts} onChange={e=>update({contentPlan:{...req.contentPlan,texts:e.target.value as typeof req.contentPlan.texts}})}><option value="customer">Kunde liefert</option><option value="existing">Bestehende übernehmen</option><option value="jx">JX erstellt</option><option value="later">Später liefern</option></select></label><label>Bilder<select value={req.contentPlan.images} onChange={e=>update({contentPlan:{...req.contentPlan,images:e.target.value as typeof req.contentPlan.images}})}><option value="customer">Kunde liefert</option><option value="existing">Bestehende übernehmen</option><option value="jx">JX beschafft/erstellt</option><option value="later">Später liefern</option></select></label></div><div className="switch-row"><div><b>JX übernimmt DNS-Einrichtung</b></div><Switch checked={req.domain.manageDns} onCheckedChange={manageDns=>updateDomain({manageDns})}/></div><div className="switch-row"><div><b>Geschäftliche E-Mail benötigt</b></div><Switch checked={req.domain.businessEmail} onCheckedChange={businessEmail=>updateDomain({businessEmail})}/></div></details>
+  </div>;
+}
+
 function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePage, device, setDevice, tab, setTab, selectedTemplate, price, openCheckout, openTemplates, undo, redo, canUndo, canRedo, savedAt }: {
   builder: BuilderState; setBuilder: BuilderSetter; currentPage: PageConfig; activePage: string; setActivePage: (id: string) => void; device: Device; setDevice: (device: Device) => void; tab: string; setTab: (tab: string) => void; selectedTemplate: Template; price: number; openCheckout: () => void; openTemplates: () => void; undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean; savedAt: number | null;
 }) {
@@ -874,7 +949,7 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
   };
   const chooseGalleryImage = (url: string) => setBuilder((prev) => ({ ...prev, content: { ...prev.content, image: url } }));
   const phoneDesktop = phone && device === "desktop";
-  const compileLive = async () => { setBuilder(prev=>({...prev,editorMode:"pro"})); try { const r=await fetch("/api/compile-site",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({configuration:builder})}); const d = await r.json() as { error?: string; files?: Record<string, string> }; if(!r.ok) throw new Error(d.error ?? "Live-Code konnte nicht kompiliert werden."); setCompiledCode(d.files ?? {}); setCodeOpen(true); } catch { toast.error("Live-Code konnte nicht kompiliert werden."); } };
+  const compileLive = async () => { setBuilder(prev=>({...prev,editorMode:"pro"})); try { const r=await fetch("/api/compile-site",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({configuration:{...builder,resolvedContent:profileFor(builder.industry),resolvedImages:imageSets[builder.industry]??[],content:{...builder.content,image:builder.content.image.startsWith("data:")?"":builder.content.image}}})}); const d = await r.json() as { error?: string; files?: Record<string, string> }; if(!r.ok) throw new Error(d.error ?? "Live-Code konnte nicht kompiliert werden."); setCompiledCode(d.files ?? {}); setCodeOpen(true); } catch { toast.error("Live-Code konnte nicht kompiliert werden."); } };
   const selectedSection = currentPage.sections.find((section) => section.id === selectedSectionId) ?? currentPage.sections[0];
   const patchSelectedSection = (patch: Partial<SectionConfig>) => selectedSection && updatePage((page) => ({ ...page, sections: page.sections.map((section) => section.id === selectedSection.id ? { ...section, ...patch } : section) }));
   const patchSectionStyle = (patch: Partial<SectionStyle>) => selectedSection && patchSelectedSection({ style: { ...(selectedSection.style ?? {}), ...patch } });
@@ -918,6 +993,7 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
             <div className="panel-heading"><div><small>DESIGN-SYSTEM</small><h2>Marke & Layout</h2></div></div>
             <button className="template-current" onClick={openTemplates}><span style={{ background: selectedTemplate.accent }} /><div><small>{builder.mode === "free" ? "Modus" : "Template"}</small><b>{selectedTemplate.name}</b><em>{selectedTemplate.category} · {selectedTemplate.style}</em></div><ChevronRight /></button>
             <label className="input-label">Unternehmensname<input value={builder.company} onChange={(event) => setBuilder((prev) => ({ ...prev, company: event.target.value }))} /></label>
+            <label className="input-label">Kontakt-E-Mail für die Website<input type="email" value={builder.contactEmail ?? ""} placeholder="kontakt@deine-domain.de" onChange={(event) => setBuilder((prev) => ({ ...prev, contactEmail: event.target.value.trim() }))} /></label>
             <div className="color-grid"><label>Akzent<input type="color" value={builder.accent} onChange={(event) => setBuilder((prev) => ({ ...prev, accent: event.target.value }))} /></label><label>Sekundär<input type="color" value={builder.secondary.slice(0, 7)} onChange={(event) => setBuilder((prev) => ({ ...prev, secondary: event.target.value }))} /></label><label>Dunkel<input type="color" value={builder.dark} onChange={(event) => setBuilder((prev) => ({ ...prev, dark: event.target.value }))} /></label><label>Fläche<input type="color" value={builder.surface} onChange={(event) => setBuilder((prev) => ({ ...prev, surface: event.target.value }))} /></label><label>Text<input type="color" value={builder.text} onChange={(event) => setBuilder((prev) => ({ ...prev, text: event.target.value }))} /></label></div>
             <label className="slider-label"><span>Eckenrundung <b>{builder.radius}px</b></span><Slider min={0} max={40} step={2} value={[builder.radius]} onValueChange={(value) => setBuilder((prev) => ({ ...prev, radius: value[0] }))} /></label>
             <label className="slider-label"><span>Sektionsabstand <b>{builder.spacing}%</b></span><Slider min={70} max={135} step={5} value={[builder.spacing]} onValueChange={(value) => setBuilder((prev) => ({ ...prev, spacing: value[0] }))} /></label>
@@ -941,9 +1017,9 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
 
           <TabsContent value="features" className="tab-panel">
             <div className="panel-heading"><div><small>OPTIONEN</small><h2>Funktionen</h2></div></div>
-            <p className="panel-help">Optionen landen mit deiner Konfiguration in der Anfrage. Der Richtpreis aktualisiert sich sofort.</p>
-            <div className="industry-module-box"><div className="module-heading"><b>{builder.industry} Funktionen</b><small>Branchenspezifische Logik, nicht nur Design.</small></div>{(industryModules[builder.industry] ?? []).map((module) => <label className="industry-module" key={module.key}><Checkbox checked={builder.addons.includes(module.key)} onCheckedChange={(checked) => setBuilder((prev) => ({ ...prev, addons: checked ? [...prev.addons, module.key] : prev.addons.filter((item) => item !== module.key) }))}/><span><b>{module.title}</b><small>{module.copy}</small></span></label>)}</div>
-            <div className="addon-list">{Object.entries(addonLabels).map(([key, label]) => <label key={key}><Checkbox checked={builder.addons.includes(key)} onCheckedChange={(checked) => setBuilder((prev) => ({ ...prev, addons: checked ? [...prev.addons, key] : prev.addons.filter((item) => item !== key) }))} /><span><b>{label}</b><small>+ {money(addonPrices[key])}</small></span></label>)}</div>
+            <p className="panel-help">Wähle Funktionen und hinterlege direkt die Daten, die JX für die Umsetzung wirklich braucht.</p><RequirementsPanel builder={builder} setBuilder={setBuilder} />
+            <div className="industry-module-box"><div className="module-heading"><b>{builder.industry} Funktionen</b><small>Branchenspezifische Logik, nicht nur Design.</small></div>{(industryModules[builder.industry] ?? []).map((module) => <label className="industry-module" key={module.key}><Checkbox checked={builder.addons.includes(module.key)} onCheckedChange={(checked) => setBuilder((prev) => { const requirements=normalizeRequirements(prev.requirements); const addons=checked?[...new Set([...prev.addons,module.key])]:prev.addons.filter(item=>item!==module.key); const appointmentKeys=new Set(["beauty-booking","practice-appointments","auto-booking","tattoo-consultation","fitness-classes","fitness-trial","restaurant-reservations"]); return {...prev,addons,requirements:{...requirements,appointments:appointmentKeys.has(module.key)?{...requirements.appointments,enabled:Boolean(checked)}:requirements.appointments,restaurantMenu:module.key==="restaurant-menu"?{...requirements.restaurantMenu,enabled:Boolean(checked)}:requirements.restaurantMenu}}; })}/><span><b>{module.title}</b><small>{module.copy}</small></span></label>)}</div>
+            <div className="addon-list">{Object.entries(addonLabels).map(([key, label]) => <label key={key}><Checkbox checked={builder.addons.includes(key)} onCheckedChange={(checked) => setBuilder((prev) => { const requirements=normalizeRequirements(prev.requirements); return { ...prev, addons: checked ? [...new Set([...prev.addons, key])] : prev.addons.filter((item) => item !== key), requirements: key==="booking" ? { ...requirements, appointments:{...requirements.appointments,enabled:Boolean(checked)} } : requirements }; })} /><span><b>{label}</b><small>+ {money(addonPrices[key])}</small></span></label>)}</div>
             <div className="switch-row"><div><b>Care-Paket</b><small>Updates & Support · 49,99 €/Monat</small></div><Switch checked={builder.care} onCheckedChange={(checked) => setBuilder((prev) => ({ ...prev, care: checked }))} /></div>
             <div className="switch-row"><div><b>Express-Umsetzung</b><small>Priorisierte Umsetzung · +20 %</small></div><Switch checked={builder.rush} onCheckedChange={(checked) => setBuilder((prev) => ({ ...prev, rush: checked }))} /></div>
           </TabsContent>
@@ -973,6 +1049,21 @@ function LandscapeHint() {
   return <div className="landscape-hint"><Smartphone size={18} /><span><b>Desktop-Vorschau auf dem Smartphone</b> Für die beste Darstellung das Smartphone ins Querformat drehen.</span></div>;
 }
 
+
+function ConfiguredBusinessModules({ builder, page }: { builder: BuilderState; page: PageConfig }) {
+  const req=normalizeRequirements(builder.requirements);
+  const onHome=page.id==="home"; const onContact=page.id==="contact";
+  const menuVisible=req.restaurantMenu.enabled && ((req.restaurantMenu.placement==="home"&&onHome)||(req.restaurantMenu.placement==="both"&&(onHome||page.id==="services"))||(req.restaurantMenu.placement==="page"&&page.id==="services"));
+  const bookingVisible=req.appointments.enabled && ((req.appointments.placement==="home"&&onHome)||(req.appointments.placement==="both"&&(onHome||onContact))||(req.appointments.placement==="page"&&onContact));
+  const contactVisible=req.contactForm.enabled && ((req.contactForm.placement==="home"&&onHome)||(req.contactForm.placement==="both"&&(onHome||onContact))||(req.contactForm.placement==="contact"&&onContact));
+  if(!menuVisible&&!bookingVisible&&!contactVisible)return null;
+  return <>
+    {menuVisible&&<section className="pv-business-module pv-menu-module"><small>SPEISEKARTE</small><h2>Unsere Karte</h2><div className="pv-menu-grid">{req.restaurantMenu.categories.map(category=><article key={category.id}><h3>{category.name}</h3>{category.items.filter(item=>item.available).map(item=><div className="pv-menu-item" key={item.id}><div><b>{item.name}</b>{item.description&&<p>{item.description}</p>}{item.allergens&&<small>Allergene: {item.allergens}</small>}</div><strong>{item.price}</strong></div>)}</article>)}</div></section>}
+    {bookingVisible&&<section className="pv-business-module pv-booking-module"><small>ONLINE TERMIN</small><h2>Leistung auswählen</h2><div className="pv-booking-grid">{req.appointments.services.map(service=><article key={service.id}><div><b>{service.name}</b><small>{service.durationMinutes} Minuten{service.price?` · ${service.price}`:""}</small></div><button type="button">Termin wählen</button></article>)}</div><p>{req.appointments.weeklyHours}</p></section>}
+    {contactVisible&&<section className="pv-business-module pv-form-module"><small>KONTAKT</small><h2>Nachricht senden</h2><div className="pv-form-preview">{req.contactForm.fields.map(field=><label key={field}>{({name:"Name",email:"E-Mail",phone:"Telefon",company:"Unternehmen",subject:"Betreff",message:"Nachricht"} as Record<string,string>)[field]??field}{req.contactForm.requiredFields.includes(field)?" *":""}{field==="message"?<textarea rows={4} disabled/>:<input disabled/>}</label>)}<button type="button">Anfrage senden</button><small>Vorschau · Empfänger: {req.contactForm.recipientEmail||"noch nicht angegeben"}</small></div></section>}
+  </>;
+}
+
 export function SitePreview({ template, builder, page, device, editable = false, onTextChange, onPageChange }: { template: Template; builder: BuilderState; page: PageConfig; device: Device; editable?: boolean; onTextChange?: (key: string, value: string) => void; onPageChange?: (id: string) => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const profile = builder.resolvedContent ?? profileFor(builder.industry);
@@ -993,75 +1084,83 @@ export function SitePreview({ template, builder, page, device, editable = false,
   const text = (section: SectionConfig, field: string, fallback: string) => builder.customText[keyFor(section, field)] ?? fallback;
   const editProps = (section: SectionConfig, field: string) => editable ? { contentEditable: true, suppressContentEditableWarning: true, className: "editable-copy", onBlur: (event: React.FocusEvent<HTMLElement>) => onTextChange?.(keyFor(section, field), event.currentTarget.textContent ?? "") } : {};
 
-  const sectionProps = (section: SectionConfig) => { const st=section.style??{}, an=section.animation??{}; return { style: { ...(st.paddingY != null ? {paddingTop:st.paddingY,paddingBottom:st.paddingY}:{}), ...(st.background?{background:st.background}:{}), ...(st.color?{color:st.color}:{}), opacity:st.opacity??1, filter:`blur(${st.blur??0}px)`, transform:`translate(${st.offsetX??0}px, ${st.offsetY??0}px) scale(${(st.scale??100)/100}) rotate(${st.rotate??0}deg)`, borderRadius:st.radius, "--jx-anim-duration":`${an.duration??700}ms`, "--jx-anim-delay":`${an.delay??0}ms`, "--jx-anim-ease":an.easing??"cubic-bezier(.16,1,.3,1)" } as React.CSSProperties }; };
+  const sectionProps = (section: SectionConfig) => { const st={...section.style,...section.responsive?.[device]}, an=section.animation??{}; return { style: { ...(st.paddingY != null ? {paddingTop:st.paddingY,paddingBottom:st.paddingY}:{}), ...(st.background?{background:st.background}:{}), ...(st.color?{color:st.color}:{}), opacity:st.opacity??1, filter:`blur(${st.blur??0}px)`, transform:`translate(${st.offsetX??0}px, ${st.offsetY??0}px) scale(${(st.scale??100)/100}) rotate(${st.rotate??0}deg)`, borderRadius:st.radius, display:st.hidden?"none":undefined, "--jx-anim-duration":`${an.duration??700}ms`, "--jx-anim-delay":`${an.delay??0}ms`, "--jx-anim-ease":an.easing??"cubic-bezier(.16,1,.3,1)" } as React.CSSProperties }; };
   const changePage = (id: string) => { setMenuOpen(false); onPageChange?.(id); };
   return <div className={`site-preview layout-${template.layout} device-${device} button-${builder.buttonStyle} hero-${builder.heroAlign}`} style={style}>
-    <nav className="preview-nav"><strong>{builder.company || "DEIN UNTERNEHMEN"}</strong><div className={menuOpen ? "open" : ""}>{builder.pages.slice(0, 4).map((item) => <button key={item.id} className={item.id === page.id ? "active" : ""} onClick={() => changePage(item.id)}>{item.name}</button>)}</div><button className="preview-menu-toggle" onClick={() => setMenuOpen((value) => !value)} aria-label="Navigation öffnen"><Menu size={18} /></button></nav>
+    <nav className="preview-nav"><strong>{builder.company || "DEIN UNTERNEHMEN"}</strong><div className={menuOpen ? "open" : ""}>{builder.pages.map((item) => <button key={item.id} className={item.id === page.id ? "active" : ""} onClick={() => changePage(item.id)}>{item.name}</button>)}</div><button className="preview-menu-toggle" onClick={() => setMenuOpen((value) => !value)} aria-label="Navigation öffnen"><Menu size={18} /></button></nav>
     {page.sections.filter((section) => !section.hidden).map((section) => {
-      if (section.kind === "hero") return <section {...sectionProps(section)} className={`pv-hero jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><div className="pv-hero-copy"><small {...editProps(section, "kicker")}>{text(section, "kicker", page.id === "home" ? builder.content.kicker : `${page.name.toUpperCase()} · ${profile.category.toUpperCase()}`)}</small><h1 {...editProps(section, "headline")}>{text(section, "headline", heroHeadline)}</h1><p {...editProps(section, "copy")}>{text(section, "copy", heroCopy)}</p><button>{page.id === "home" ? builder.content.cta : profile.cta} <ArrowRight size={14} /></button></div><img src={builder.content.image || template.image} alt={`${builder.company} ${profile.category}`} /></section>;
+      if (section.kind === "hero") return <section {...sectionProps(section)} className={`pv-hero jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><div className="pv-hero-copy"><small {...editProps(section, "kicker")}>{text(section, "kicker", page.id === "home" ? builder.content.kicker : `${page.name.toUpperCase()} · ${profile.category.toUpperCase()}`)}</small><h1 {...editProps(section, "headline")}>{text(section, "headline", heroHeadline)}</h1><p {...editProps(section, "copy")}>{text(section, "copy", heroCopy)}</p><button onClick={(event) => { const next=event.currentTarget.closest("section")?.nextElementSibling; if (next?.tagName === "SECTION") next.scrollIntoView({behavior:"smooth"}); else changePage(builder.pages.find(p=>p.id==="contact")?.id??builder.pages.at(-1)?.id??page.id); }}>{page.id === "home" ? builder.content.cta : profile.cta} <ArrowRight size={14} /></button></div><img src={builder.content.image || template.image} alt={`${builder.company} ${profile.category}`} /></section>;
       if (section.kind === "services") return <section {...sectionProps(section)} className={`pv-services jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><small>LEISTUNGEN</small><h2 {...editProps(section, "headline")}>{text(section, "headline", profile.serviceTitle)}</h2><div>{profile.services.map((item, itemIndex) => <article key={item.title}><b>0{itemIndex + 1}</b><h3 {...editProps(section, `service-${itemIndex}-title`)}>{text(section, `service-${itemIndex}-title`, item.title)}</h3><p {...editProps(section, `service-${itemIndex}-copy`)}>{text(section, `service-${itemIndex}-copy`, item.copy)}</p></article>)}</div></section>;
-      if (section.kind === "about") return <section {...sectionProps(section)} className={`pv-about jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><div className="pv-image" style={{ backgroundImage: `url(${builder.resolvedImages?.[1] ?? imageSets[template.category]?.[1] ?? builder.content.image})` }} /><div><small>ÜBER UNS</small><h2 {...editProps(section, "headline")}>{text(section, "headline", profile.aboutTitle)}</h2><p {...editProps(section, "copy")}>{text(section, "copy", profile.aboutCopy)}</p><a>Mehr erfahren <ArrowRight size={14} /></a></div></section>;
-      if (section.kind === "projects") return <section {...sectionProps(section)} className={`pv-projects jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><small>REFERENZEN</small><h2 {...editProps(section, "headline")}>{text(section, "headline", profile.projectsTitle)}</h2><div>{[0, 2].map((imageIndex, projectIndex) => <article key={imageIndex} style={{ backgroundImage: `url(${builder.resolvedImages?.[imageIndex] ?? imageSets[template.category]?.[imageIndex] ?? builder.content.image})` }}><span {...editProps(section, `project-${projectIndex}`)}>{text(section, `project-${projectIndex}`, profile.projectNames[projectIndex])}</span></article>)}</div></section>;
-      if (section.kind === "reviews") return <section {...sectionProps(section)} className={`pv-review jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><span>★★★★★</span><blockquote {...editProps(section, "quote")}>„{text(section, "quote", profile.review)}“</blockquote><small {...editProps(section, "reviewer")}>— {text(section, "reviewer", profile.reviewer)}</small></section>;
-      if (section.kind === "contact") return <section {...sectionProps(section)} className={`pv-contact jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><div><small>KONTAKT</small><h2 {...editProps(section, "headline")}>{text(section, "headline", profile.cta)}</h2><p {...editProps(section, "copy")}>{text(section, "copy", "Erzähl uns kurz, worum es geht. Wir melden uns persönlich zurück.")}</p></div><form><input aria-label="Name" placeholder="Name" /><input aria-label="E-Mail" placeholder="E-Mail" /><textarea aria-label="Nachricht" placeholder="Nachricht" /><button type="button">Anfrage senden</button></form></section>;
-      return <section {...sectionProps(section)} className={`pv-cta jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><div><small>NÄCHSTER SCHRITT</small><h2 {...editProps(section, "headline")}>{text(section, "headline", profile.cta)}</h2></div><button>{builder.content.cta || "Jetzt anfragen"} <ArrowRight size={14} /></button></section>;
+      if (section.kind === "about") return <section {...sectionProps(section)} className={`pv-about jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><div className="pv-image" style={{ backgroundImage: `url(${builder.resolvedImages?.[1] ?? imageSets[template.category]?.[1] ?? builder.content.image})` }} /><div><small>ÜBER UNS</small><h2 {...editProps(section, "headline")}>{text(section, "headline", profile.aboutTitle)}</h2><p {...editProps(section, "copy")}>{text(section, "copy", profile.aboutCopy)}</p>{page.id!=="about" && builder.pages.some(p=>p.id==="about") && <button className="pv-about-link" onClick={()=>changePage("about")}>Mehr erfahren <ArrowRight size={14}/></button>}</div></section>;
+      if (section.kind === "projects") return <section {...sectionProps(section)} className={`pv-projects jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><small>REFERENZEN</small><h2 {...editProps(section, "headline")}>{text(section, "headline", profile.projectsTitle)}</h2><div>{[0, 2].map((imageIndex, projectIndex) => <article key={imageIndex} style={{ backgroundImage: `url(${builder.resolvedImages?.[imageIndex] ?? imageSets[template.category]?.[imageIndex] ?? builder.content.image})` }}><span>{!builder.customText[keyFor(section, `project-${projectIndex}`)] && <small>BEISPIELPROJEKT · </small>}<span {...editProps(section, `project-${projectIndex}`)}>{text(section, `project-${projectIndex}`, profile.projectNames[projectIndex])}</span></span></article>)}</div></section>;
+      if (section.kind === "reviews") return <section {...sectionProps(section)} className={`pv-review jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}>{(!builder.customText[keyFor(section,"quote")] || !builder.customText[keyFor(section,"reviewer")]) && <span>BEISPIELINHALT · ECHTE KUNDENSTIMME EINSETZEN</span>}<blockquote {...editProps(section, "quote")}>„{text(section, "quote", profile.review)}“</blockquote><small {...editProps(section, "reviewer")}>— {text(section, "reviewer", profile.reviewer)}</small></section>;
+      if (section.kind === "contact") return <section {...sectionProps(section)} className={`pv-contact jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><div><small>KONTAKT</small><h2 {...editProps(section, "headline")}>{text(section, "headline", profile.cta)}</h2><p {...editProps(section, "copy")}>{text(section, "copy", "Erzähl uns kurz, worum es geht. Wir melden uns persönlich zurück.")}</p></div><div className="pv-contact-placeholder"><strong>Kontaktbereich</strong>{builder.contactEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(builder.contactEmail) ? <><p>Schreib uns für eine persönliche Anfrage.</p><a href={`mailto:${builder.contactEmail}`}>{builder.contactEmail}</a></> : <p>Beispielansicht: Trage im Builder eine Kontakt-E-Mail ein.</p>}</div></section>;
+      return <section {...sectionProps(section)} className={`pv-cta jx-config-section jx-anim-${section.animation?.type ?? "none"}`} key={section.id} data-jx-section={section.id}><div><small>NÄCHSTER SCHRITT</small><h2 {...editProps(section, "headline")}>{text(section, "headline", profile.cta)}</h2></div><button onClick={() => changePage(builder.pages.find(p=>p.id==="contact")?.id??builder.pages.at(-1)?.id??page.id)}>{builder.content.cta || "Jetzt anfragen"} <ArrowRight size={14} /></button></section>;
     })}
-    <footer className="pv-footer"><strong>{builder.company}</strong><span>© 2026 · Impressum · Datenschutz</span></footer>
+    <ConfiguredBusinessModules builder={builder} page={page} />
+    <footer className="pv-footer"><strong>{builder.company}</strong><span>Beispielwebsite · Rechtstexte vor Veröffentlichung ergänzen</span></footer>
   </div>;
 }
 
 export function ConfigurationPreview({ configuration }: { configuration: unknown }) {
   if (!configuration || typeof configuration !== "object") return <div className="admin-preview-empty">Keine Website-Konfiguration vorhanden.</div>;
+  let builder: BuilderState;
   try {
-    const builder = normaliseBuilder(configuration as Partial<BuilderState>);
-    const template = builder.templateId === blankTemplate.id ? blankTemplate : templates.find((item) => item.id === builder.templateId) ?? templates[0];
-    const page = builder.pages.find((item) => item.id === "home") ?? builder.pages[0];
-    if (!page) return <div className="admin-preview-empty">Konfiguration enthält keine Seite.</div>;
-    return <div className="admin-preview-wrap"><SitePreview template={{ ...template, accent: builder.accent, dark: builder.dark }} builder={builder} page={page} device="mobile" /></div>;
+    builder = normaliseBuilder(configuration as Partial<BuilderState>);
   } catch {
     return <div className="admin-preview-empty">Konfiguration konnte nicht gerendert werden.</div>;
   }
+  const template = builder.templateId === blankTemplate.id ? blankTemplate : templates.find((item) => item.id === builder.templateId) ?? templates[0];
+  const page = builder.pages.find((item) => item.id === "home") ?? builder.pages[0];
+  if (!page) return <div className="admin-preview-empty">Konfiguration enthält keine Seite.</div>;
+  return <div className="admin-preview-wrap"><SitePreview template={{ ...template, accent: builder.accent, dark: builder.dark }} builder={builder} page={page} device="mobile" /></div>;
 }
 
 function ConsultationPage({ navigate }: { navigate: (view: View) => void }) {
   type Slot = { id:number; startsAt:string; endsAt:string };
-  const [slots,setSlots]=useState<Slot[]>([]); const [selected,setSelected]=useState<Slot|null>(null); const [loading,setLoading]=useState(true); const [booking,setBooking]=useState(false); const [reference,setReference]=useState<number|null>(null);
-  useEffect(()=>{const from=new Date();const to=new Date(Date.now()+1000*60*60*24*60);fetch(`/api/appointments?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,{cache:"no-store"}).then(async r=>{const d=await r.json() as {slots?:Slot[]};if(r.ok)setSlots(d.slots??[])}).finally(()=>setLoading(false));},[]);
+  const [slots,setSlots]=useState<Slot[]>([]); const [selected,setSelected]=useState<Slot|null>(null); const [loading,setLoading]=useState(true); const [booking,setBooking]=useState(false); const [reference,setReference]=useState<number|null>(null); const [loadError,setLoadError]=useState("");
+  useEffect(()=>{const from=new Date();const to=new Date(Date.now()+1000*60*60*24*60);fetch(`/api/appointments?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,{cache:"no-store"}).then(async r=>{const d=await r.json() as {slots?:Slot[]};if(r.ok)setSlots(d.slots??[]);else setLoadError("Freie Termine konnten nicht geladen werden. Bitte nutze die Projektanfrage.")}).catch(()=>setLoadError("Freie Termine konnten nicht geladen werden. Bitte nutze die Projektanfrage.")).finally(()=>setLoading(false));},[]);
   const book=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();if(!selected)return;setBooking(true);const f=new FormData(e.currentTarget);try{const r=await fetch("/api/appointments",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...Object.fromEntries(f.entries()),startsAt:selected.startsAt,durationMinutes:Math.max(15,Math.round((new Date(selected.endsAt).getTime()-new Date(selected.startsAt).getTime())/60000))})});const d=await r.json() as {id?:number;error?:string};if(!r.ok)throw new Error(d.error||"Termin konnte nicht gebucht werden.");setReference(d.id??null);setSlots(x=>x.filter(v=>v.id!==selected.id));toast.success("Beratungstermin gebucht.")}catch(err){toast.error(err instanceof Error?err.message:"Termin konnte nicht gebucht werden.")}finally{setBooking(false)}};
   const fmt=(iso:string)=>new Intl.DateTimeFormat("de-DE",{weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(iso));
   return <main className="page-main consultation-page">
-    <section className="consultation-hero"><div><span className="eyebrow"><CalendarDays size={14}/> Persönliche Website-Beratung</span><h1>Du musst den Builder<br/><em>nicht allein verstehen.</em></h1><p>Wir konfigurieren dein Projekt gemeinsam. Design, Seiten, Funktionen und nächste Schritte landen direkt im selben JX Workflow.</p><div className="consult-points"><span><Check/> Entwurf bleibt gespeichert</span><span><Check/> Live im Builder planen</span><span><Check/> Danach derselbe Produktionsworkflow</span></div></div><div className="consult-card"><span>ECHTE VERFÜGBARKEIT</span><h3>Website gemeinsam planen</h3><div className="consult-meta"><span><Clock3/> 45 Minuten</span><span><Users/> 1:1 mit JX Studio</span></div>{reference?<div className="form-success"><Check/><h3>Termin gebucht.</h3><p>Referenz: <b>JXA-{reference}</b><br/>Die Buchung liegt jetzt im JX Admin.</p></div>:<>{loading?<p>Freie Termine werden geladen …</p>:slots.length===0?<p>Aktuell sind keine freien Termine eingetragen. Nutze alternativ die Projektanfrage.</p>:<div className="slot-grid real-slots">{slots.slice(0,12).map(slot=><button key={slot.id} className={selected?.id===slot.id?"active":""} onClick={()=>setSelected(slot)}>{fmt(slot.startsAt)}</button>)}</div>}{selected&&<form className="consult-booking-form" onSubmit={book}><input name="name" required placeholder="Name"/><input name="email" required type="email" placeholder="E-Mail"/><input name="company" placeholder="Unternehmen"/><input name="phone" placeholder="Telefon"/><select name="projectType" defaultValue="Website"><option>Website</option><option>Online-Shop</option><option>Software / Webapp</option><option>Kundenportal</option><option>KI-Assistent</option></select><textarea name="notes" placeholder="Was möchtest du besprechen?"/><button className="btn-primary" disabled={booking}>{booking?"Wird gebucht …":`${fmt(selected.startsAt)} verbindlich reservieren`}<ArrowRight size={16}/></button></form>} {!selected&&slots.length>0&&<small className="consult-note">Wähle einen freien Termin. Doppelbuchungen werden serverseitig verhindert.</small>}</>}</div></section>
+    <section className="consultation-hero"><div><span className="eyebrow"><CalendarDays size={14}/> Persönliche Website-Beratung</span><h1>Du musst den Builder<br/><em>nicht allein verstehen.</em></h1><p>Wir konfigurieren dein Projekt gemeinsam. Design, Seiten, Funktionen und nächste Schritte landen direkt im selben JX Workflow.</p><div className="consult-points"><span><Check/> Entwurf bleibt gespeichert</span><span><Check/> Live im Builder planen</span><span><Check/> Danach derselbe Produktionsworkflow</span></div></div><div className="consult-card"><span>ECHTE VERFÜGBARKEIT</span><h3>Website gemeinsam planen</h3><div className="consult-meta"><span><Clock3/> {selected ? `${Math.round((new Date(selected.endsAt).getTime()-new Date(selected.startsAt).getTime())/60000)} Minuten` : "Dauer je Zeitfenster"}</span><span><Users/> 1:1 mit JX Studio</span></div>{reference?<div className="form-success"><Check/><h3>Termin gebucht.</h3><p>Referenz: <b>JXA-{reference}</b><br/>Die Buchung liegt jetzt im JX Admin.</p></div>:<>{loading?<p>Freie Termine werden geladen …</p>:loadError?<p role="alert">{loadError}</p>:slots.length===0?<p>Aktuell sind keine freien Termine eingetragen. Nutze alternativ die Projektanfrage.</p>:<div className="slot-grid real-slots">{slots.slice(0,12).map(slot=><button key={slot.id} className={selected?.id===slot.id?"active":""} onClick={()=>setSelected(slot)}>{fmt(slot.startsAt)} · {Math.round((new Date(slot.endsAt).getTime()-new Date(slot.startsAt).getTime())/60000)} Min.</button>)}</div>}{!loading && (loadError || slots.length===0) && <button className="btn-secondary" onClick={()=>navigate("contact")}>Projekt persönlich anfragen <ArrowRight size={14}/></button>}{selected&&<form className="consult-booking-form" onSubmit={book}><label>Name *<input name="name" required minLength={2} autoComplete="name" placeholder="Name"/></label><label>E-Mail *<input name="email" required type="email" autoComplete="email" placeholder="E-Mail"/></label><label>Unternehmen<input name="company" autoComplete="organization" placeholder="Unternehmen"/></label><label>Telefon<input name="phone" type="tel" autoComplete="tel" placeholder="Telefon"/></label><label>Projektart<select name="projectType" defaultValue="Website"><option>Website</option><option>Online-Shop</option><option>Software / Webapp</option><option>Kundenportal</option><option>KI-Assistent</option></select></label><label>Was möchtest du besprechen?<textarea name="notes" placeholder="Ziele, vorhandene Website, gewünschte Funktionen"/></label><button className="btn-primary" disabled={booking}>{booking?"Wird gebucht …":`${fmt(selected.startsAt)} verbindlich reservieren`}<ArrowRight size={16}/></button></form>} {!selected&&slots.length>0&&<small className="consult-note">Wähle einen freien Termin. Doppelbuchungen werden serverseitig verhindert.</small>}</>}</div></section>
     <section className="consultation-process"><span className="eyebrow dark">Ein Workflow, zwei Einstiege</span><h2>Selbst bauen oder gemeinsam planen.<br/>Danach läuft alles gleich.</h2><div>{[["01","Vorbereiten","Branche, Ziel und vorhandene Inhalte angeben."],["02","Gemeinsam konfigurieren","Wir arbeiten live an demselben JX Builder."],["03","Projekt festziehen","Funktionen, Preis und Umfang werden aus der Konfiguration abgeleitet."],["04","Produktion","Compiler, QA, persönlicher Feinschliff, Freigabe und Launch."]].map(([n,t,c])=><article key={n}><b>{n}</b><h3>{t}</h3><p>{c}</p></article>)}</div></section>
   </main>;
 }
 
 function ContactPage() {
-  return <main className="page-main contact-page"><section className="page-intro"><span className="eyebrow">Projektanfrage</span><h1>Erzähl kurz,<br /><em>was du vorhast.</em></h1><p>Website, Shop, Portal oder individuelles Development. Je klarer das Ziel, desto konkreter kann die erste Einschätzung sein.</p></section><section className="contact-layout"><div className="contact-copy"><span>Direkter Kontakt</span><a href="mailto:J.schneider.05@gmx.net">J.schneider.05@gmx.net</a><p>Bremen & Umgebung<br />Projekte deutschlandweit</p><div><b>Was danach passiert</b><ol><li><span>1</span>Die Anfrage wird geprüft und strukturiert.</li><li><span>2</span>Du bekommst eine persönliche Rückmeldung.</li><li><span>3</span>Nach der Abstimmung folgt ein verbindliches Angebot.</li></ol></div></div><InquiryForm /></section></main>;
+  return <main className="page-main contact-page"><section className="page-intro"><span className="eyebrow">Projektanfrage</span><h1>Erzähl kurz,<br /><em>was du vorhast.</em></h1><p>Website, Shop, Portal oder individuelles Development. Je klarer das Ziel, desto konkreter kann die erste Einschätzung sein.</p></section><section className="contact-layout"><div className="contact-copy"><span>Direkter Kontakt</span>{process.env.NEXT_PUBLIC_CONTACT_EMAIL ? <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL}`}>{process.env.NEXT_PUBLIC_CONTACT_EMAIL}</a> : <span>Schreib uns über das Anfrageformular.</span>}<p>Bremen & Umgebung<br />Projekte deutschlandweit</p><div><b>Was danach passiert</b><ol><li><span>1</span>Die Anfrage wird geprüft und strukturiert.</li><li><span>2</span>Du bekommst eine persönliche Rückmeldung.</li><li><span>3</span>Nach der Abstimmung folgt ein verbindliches Angebot.</li></ol></div></div><InquiryForm /></section></main>;
 }
 
 
-function DirectCheckout({ configuration, estimatedPrice }: { configuration: BuilderState; estimatedPrice: number }) {
+function DirectCheckout({ configuration, estimatedPrice, blocked = false, blockedReason = "" }: { configuration: BuilderState; estimatedPrice: number; blocked?: boolean; blockedReason?: string }) {
   const [loading, setLoading] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [availability, setAvailability] = useState<{enabled:boolean;terms:string;privacy:string}|null>(null);
+  useEffect(() => { fetch("/api/checkout", {cache:"no-store"}).then(r=>r.json() as Promise<{enabled:boolean;terms:string;privacy:string}>).then(setAvailability).catch(()=>setAvailability({enabled:false,terms:"",privacy:""})); }, []);
   const start = async () => {
+    if (blocked) { toast.error(blockedReason || "Projektangaben sind noch unvollständig."); return; }
     if (!accepted) { toast.error("Bitte bestätige den kostenpflichtigen Auftrag."); return; }
     setLoading(true);
     try {
-      const response = await fetch("/api/checkout", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({ configuration: { ...configuration, resolvedContent: profileFor(configuration.industry), resolvedImages: imageSets[configuration.industry] ?? [] }, estimatedPrice }) });
+      const response = await fetch("/api/checkout", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({ configuration: { ...configuration, resolvedContent: profileFor(configuration.industry), resolvedImages: imageSets[configuration.industry] ?? [], content: { ...configuration.content, image: configuration.content.image.startsWith("data:") ? "" : configuration.content.image } }, estimatedPrice }) });
       const data = await response.json() as { url?:string; error?:string };
       if (!response.ok || !data.url) throw new Error(data.error || "Checkout konnte nicht gestartet werden.");
       window.location.href = data.url;
     } catch (error) { toast.error(error instanceof Error ? error.message : "Checkout konnte nicht gestartet werden."); }
     finally { setLoading(false); }
   };
-  return <div className="direct-checkout"><div><b>Direkt beauftragen</b><p>Für klar kalkulierte Website-Projekte. Sichere Online-Zahlung; danach wird dein Projekt automatisch als Auftrag angelegt.</p></div><label className="consent"><input type="checkbox" checked={accepted} onChange={(e)=>setAccepted(e.target.checked)}/><span>Ich möchte das konfigurierte Projekt kostenpflichtig beauftragen und akzeptiere den angezeigten Einmalpreis. Rechtstexte und Vertragsdetails werden vor dem öffentlichen Launch final hinterlegt.</span></label><button className="btn-primary" onClick={start} disabled={loading || !accepted}>{loading ? "Checkout wird geöffnet …" : `Zahlungspflichtig beauftragen · ${money(estimatedPrice)}`} <ArrowRight size={16}/></button><small>Mit aktivem JX Care wird der Checkout als monatliches Abo angelegt. Externe Domain- und Hostinggebühren sind nicht enthalten.</small></div>;
+  return <div className="direct-checkout"><div><b>Direkt beauftragen</b><p>Für klar kalkulierte Website-Projekte. Sichere Online-Zahlung; danach wird dein Projekt automatisch als Auftrag angelegt.</p></div>{blocked ? <p role="status" className="checkout-blocked">{blockedReason}</p> : availability?.enabled ? <><label className="consent"><input type="checkbox" checked={accepted} onChange={(e)=>setAccepted(e.target.checked)}/><span>Ich beauftrage das konfigurierte Projekt zum angezeigten Einmalpreis und akzeptiere die <a href={availability.terms} target="_blank" rel="noopener noreferrer">Vertragsbedingungen</a> und <a href={availability.privacy} target="_blank" rel="noopener noreferrer">Datenschutzhinweise</a>.</span></label><button className="btn-primary" onClick={start} disabled={loading || !accepted}>{loading ? "Checkout wird geöffnet …" : `Zahlungspflichtig beauftragen · ${money(estimatedPrice)}`} <ArrowRight size={16}/></button><small>Mit aktivem JX Care wird der Checkout als monatliches Abo angelegt. Externe Domain- und Hostinggebühren sind nicht enthalten.</small></> : <p role="status">Direktbeauftragung wird nach Freischaltung der Zahlung und Rechtstexte verfügbar. Nutze bis dahin die persönliche Anfrage.</p>}</div>;
 }
 
 function InquiryForm({ configuration, estimatedPrice, onSuccess, compact = false }: { configuration?: BuilderState; estimatedPrice?: number; onSuccess?: () => void; compact?: boolean }) {
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const requestId = useRef<string | null>(null);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (sending) return;
+    requestId.current ??= crypto.randomUUID();
     const consentInput = event.currentTarget.elements.namedItem("consent") as HTMLInputElement | null;
     if (!consentInput?.checked) { toast.error("Bitte bestätige die Speicherung deiner Angaben."); return; }
     setSending(true); setSuccess(null);
@@ -1069,7 +1168,7 @@ function InquiryForm({ configuration, estimatedPrice, onSuccess, compact = false
     const payload = Object.fromEntries(form.entries());
     try {
       const safeConfiguration = configuration ? { ...configuration, resolvedContent: profileFor(configuration.industry), resolvedImages: imageSets[configuration.industry] ?? [], content: { ...configuration.content, image: configuration.content.image.startsWith("data:") ? "[lokaler Upload – wird separat benötigt]" : configuration.content.image } } : undefined;
-      const response = await fetch("/api/contact", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...payload, source: safeConfiguration ? "builder" : "contact", configuration: safeConfiguration, estimatedPrice }) });
+      const response = await fetch("/api/contact", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...payload, message: String(payload.message || "").trim() || (safeConfiguration ? "Ich möchte meine konfigurierte Website unverbindlich besprechen." : ""), requestId: requestId.current, source: safeConfiguration ? "builder" : "contact", configuration: safeConfiguration, estimatedPrice }) });
       const data = await response.json() as { error?: string; reference?: string; emailSent?: boolean };
       if (!response.ok) throw new Error(data.error || "Senden fehlgeschlagen");
       if (data.emailSent === false) toast.warning("Anfrage gespeichert. Die E-Mail-Benachrichtigung ist aktuell noch nicht aktiv.");
@@ -1082,12 +1181,12 @@ function InquiryForm({ configuration, estimatedPrice, onSuccess, compact = false
     <div className="form-grid"><label>Dein Name *<input name="name" required minLength={2} autoComplete="name" /></label><label>E-Mail *<input name="email" required type="email" autoComplete="email" /></label></div>
     <div className="form-grid"><label>Unternehmen<input name="company" autoComplete="organization" /></label><label>Telefon<input name="phone" type="tel" autoComplete="tel" /></label></div>
     {!configuration && <label>Worum geht es?<select name="subject" defaultValue="Website"><option>Website</option><option>Online-Shop</option><option>Software / Webapp</option><option>Kundenportal</option><option>Online-Marketing</option><option>Betreuung</option><option>Sonstiges</option></select></label>}
-    <label>Nachricht *<textarea name="message" required minLength={10} rows={compact ? 4 : 7} placeholder={configuration ? "Gibt es noch etwas, das wir wissen sollten?" : "Was möchtest du erreichen? Welche Seiten oder Funktionen brauchst du?"} /></label>
+    <label>{configuration ? "Zusätzliche Nachricht (optional)" : "Nachricht *"}<textarea name="message" required={!configuration} minLength={configuration ? undefined : 10} rows={compact ? 4 : 7} placeholder={configuration ? "Gibt es noch etwas, das wir wissen sollten?" : "Was möchtest du erreichen? Welche Seiten oder Funktionen brauchst du?"} /></label>
     <label className="consent"><input type="checkbox" name="consent" required /><span>Ich stimme zu, dass meine Angaben zur Bearbeitung der Anfrage gespeichert werden.</span></label>
     <button className="btn-primary submit-button" disabled={sending}>{sending ? "Wird gesendet …" : configuration ? "Konfiguration unverbindlich anfragen" : "Anfrage senden"} <ArrowRight size={17} /></button>
   </form>;
 }
 
 function Footer({ navigate }: { navigate: (view: View) => void }) {
-  return <footer className="main-footer"><div><BrandLogo onClick={() => navigate("home")} /><p>Webdesign, Development und digitale Systeme.<br />Entwickelt in Bremen.</p></div><div><b>Entdecken</b><button onClick={() => navigate("templates")}>Templates</button><button onClick={() => navigate("services")}>Leistungen</button><button onClick={() => navigate("builder")}>Studio</button><button onClick={() => navigate("consultation")}>Persönliche Beratung</button></div><div><b>Kontakt</b><a href="mailto:J.schneider.05@gmx.net">J.schneider.05@gmx.net</a><span>Bremen · Deutschlandweit</span><a className="admin-link" href="/admin">Projekt-Eingang</a></div><div className="footer-bottom"><span>© 2026 JX Studio</span><span>Impressum · Datenschutz</span></div></footer>;
+  return <footer className="main-footer"><div><BrandLogo onClick={() => navigate("home")} /><p>Webdesign, Development und digitale Systeme.<br />Entwickelt in Bremen.</p></div><div><b>Entdecken</b><button onClick={() => navigate("templates")}>Templates</button><button onClick={() => navigate("services")}>Leistungen</button><button onClick={() => navigate("builder")}>Studio</button><button onClick={() => navigate("consultation")}>Persönliche Beratung</button></div><div><b>Kontakt</b>{process.env.NEXT_PUBLIC_CONTACT_EMAIL ? <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL}`}>{process.env.NEXT_PUBLIC_CONTACT_EMAIL}</a> : <button onClick={() => navigate("contact")}>Kontakt aufnehmen</button>}<span>Bremen · Deutschlandweit</span><Link className="admin-link" href="/admin">Projekt-Eingang</Link></div><div className="footer-bottom"><span>© 2026 JX Studio</span><span>{process.env.NEXT_PUBLIC_IMPRINT_URL ? <a href={process.env.NEXT_PUBLIC_IMPRINT_URL}>Impressum</a> : "Impressum vor Launch ergänzen"} · {process.env.NEXT_PUBLIC_PRIVACY_URL ? <a href={process.env.NEXT_PUBLIC_PRIVACY_URL}>Datenschutz</a> : "Datenschutz vor Launch ergänzen"}</span></div></footer>;
 }

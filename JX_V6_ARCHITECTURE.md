@@ -1,5 +1,8 @@
 # JX Studio V6 — Production Workflow Foundation
 
+> Historischer Projektstand. Für den aktuellen Lieferstand und die Launch-Schritte gelten `README.md`, `JX_STUDIO_FINAL_RELEASE.md` und `LAUNCH_CHECKLIST.md`.
+
+
 ## Non-negotiable rule
 Builder preview and production output must consume the same canonical `SiteConfig` and the same rendering primitives. The generator must not reinterpret design decisions. The current legacy HTML exporter remains only as a compatibility path until the shared runtime/compiler replaces it.
 

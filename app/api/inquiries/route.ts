@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const db = getDb();
     const rows = await db.select().from(inquiries).orderBy(desc(inquiries.createdAt)).limit(250);
     const orderRows = await db.select().from(orders).orderBy(desc(orders.createdAt)).limit(100);
-    return Response.json({ inquiries: rows.map((row: any) => ({ ...row, configuration: row.configuration ? safeParse(row.configuration) : null })), orders: orderRows.map((row:any)=>({...row, configuration: safeParse(row.configuration)})) });
+    return Response.json({ inquiries: rows.map(row => ({ ...row, configuration: row.configuration ? safeParse(row.configuration) : null })), orders: orderRows.map(row=>({...row, configuration: safeParse(row.configuration)})) }, { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     console.error("inquiries_fetch_failed", error);
     return Response.json({ error: "Anfragen konnten nicht geladen werden. Prüfe Datenbank und Migrationen." }, { status: 500 });

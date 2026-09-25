@@ -1,5 +1,8 @@
 # JX Studio FINAL
 
+> Historischer Projektstand. Für den aktuellen Lieferstand und die Launch-Schritte gelten `README.md`, `JX_STUDIO_FINAL_RELEASE.md` und `LAUNCH_CHECKLIST.md`.
+
+
 This is the consolidated master. No fake provider activation is included.
 
 ## Product flow

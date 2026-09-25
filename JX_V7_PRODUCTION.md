@@ -1,5 +1,8 @@
 # JX Studio V7 Production Candidate
 
+> Historischer Projektstand. Für den aktuellen Lieferstand und die Launch-Schritte gelten `README.md`, `JX_STUDIO_FINAL_RELEASE.md` und `LAUNCH_CHECKLIST.md`.
+
+
 ## Kernregel
 SiteConfig ist die einzige Quelle der Wahrheit. Preview, Code-Compiler und Export dürfen keine unabhängigen Designentscheidungen treffen.
 
