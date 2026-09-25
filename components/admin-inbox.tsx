@@ -33,11 +33,15 @@ function textValue(value: unknown) { return typeof value === "string" ? value : 
 function stringList(value: unknown) { return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []; }
 
 function OrderConfigurationSummary({ configuration }: { configuration: unknown }) {
-  const cfg=record(configuration); const req=record(cfg.requirements); const business=record(req.business); const domain=record(req.domain); const contact=record(req.contactForm); const appointments=record(req.appointments); const menu=record(req.restaurantMenu); const content=record(req.contentPlan);
+  const cfg=record(configuration); const req=record(cfg.requirements); const business=record(req.business); const domain=record(req.domain); const contact=record(req.contactForm); const appointments=record(req.appointments); const menu=record(req.restaurantMenu); const realEstate=record(req.realEstate); const fitness=record(req.fitness); const commerce=record(req.commerce); const automotive=record(req.automotive); const serviceRequest=record(req.serviceRequest); const vouchers=record(req.vouchers); const newsletter=record(req.newsletter); const content=record(req.contentPlan);
   const pages=Array.isArray(cfg.pages)?cfg.pages.map(p=>textValue(record(p).name)).filter(Boolean):[];
   const services=Array.isArray(appointments.services)?appointments.services.map(s=>record(s)).filter(s=>textValue(s.name)):[];
   const categories=Array.isArray(menu.categories)?menu.categories.map(c=>record(c)):[];
   const dishes=categories.reduce((sum,c)=>sum+(Array.isArray(c.items)?c.items.length:0),0);
+  const properties=Array.isArray(realEstate.listings)?realEstate.listings.length:0;
+  const fitnessClasses=Array.isArray(fitness.classes)?fitness.classes.length:0;
+  const products=Array.isArray(commerce.products)?commerce.products.length:0;
+  const autoServices=Array.isArray(automotive.services)?automotive.services.length:0;
   return <div className="order-config-summary">
     <div><b>Projekt</b><span>{textValue(cfg.company)||"–"}</span><small>{textValue(cfg.industry)||"–"} · Template {textValue(cfg.templateId)||"–"}</small></div>
     <div><b>Seiten</b><span>{pages.join(", ")||"–"}</span><small>{pages.length} Seiten</small></div>
@@ -45,6 +49,13 @@ function OrderConfigurationSummary({ configuration }: { configuration: unknown }
     <div><b>Kontaktformular</b><span>{contact.enabled?"Aktiv":"Nicht gewählt"}</span><small>{contact.enabled?`Empfänger: ${textValue(contact.recipientEmail)||"FEHLT"}`:"–"}</small></div>
     <div><b>Terminbuchung</b><span>{appointments.enabled?`${services.length} Leistungen`:"Nicht gewählt"}</span><small>{appointments.enabled?`Empfänger: ${textValue(appointments.recipientEmail)||"FEHLT"}`:"–"}</small></div>
     <div><b>Speisekarte</b><span>{menu.enabled?`${categories.length} Kategorien · ${dishes} Gerichte`:"Nicht gewählt"}</span><small>{menu.enabled?"Im Auftrag konfiguriert":"–"}</small></div>
+    <div><b>Immobilien</b><span>{realEstate.enabled?`${properties} Objekte`:"Nicht gewählt"}</span><small>{realEstate.enabled?`Anfragen an ${textValue(realEstate.recipientEmail)||"FEHLT"}`:"–"}</small></div>
+    <div><b>Fitness</b><span>{fitness.enabled?`${fitnessClasses} Kurse`:"Nicht gewählt"}</span><small>{fitness.enabled?`Probetraining: ${fitness.trialTraining?"Ja":"Nein"}`:"–"}</small></div>
+    <div><b>Shop</b><span>{commerce.enabled?`${products} Produkte`:"Nicht gewählt"}</span><small>{commerce.enabled?`Provider: ${textValue(commerce.provider)||"FEHLT"}`:"–"}</small></div>
+    <div><b>Automotive</b><span>{automotive.enabled?`${autoServices} Leistungen`:"Nicht gewählt"}</span><small>{automotive.enabled?`Empfänger: ${textValue(automotive.recipientEmail)||"FEHLT"}`:"–"}</small></div>
+    <div><b>Projektanfrage</b><span>{serviceRequest.enabled?`${stringList(serviceRequest.serviceOptions).length} Leistungen`:"Nicht gewählt"}</span><small>{serviceRequest.enabled?`Uploads: ${serviceRequest.allowUploads?"Ja":"Nein"}`:"–"}</small></div>
+    <div><b>Gutscheine</b><span>{vouchers.enabled?`${Array.isArray(vouchers.presetValues)?vouchers.presetValues.length:0} Festwerte`:"Nicht gewählt"}</span><small>{vouchers.enabled?`${String(vouchers.validityMonths||"–")} Monate gültig`:"–"}</small></div>
+    <div><b>Newsletter</b><span>{newsletter.enabled?textValue(newsletter.provider)||"Provider fehlt":"Nicht gewählt"}</span><small>{newsletter.enabled?`Liste: ${textValue(newsletter.listName)||"FEHLT"}`:"–"}</small></div>
     <div><b>Domain</b><span>{textValue(domain.status)||"undecided"}</span><small>{textValue(domain.domainName)||"Keine Domain angegeben"}</small></div>
     <div><b>Content</b><span>Texte: {textValue(content.texts)||"–"}</span><small>Bilder: {textValue(content.images)||"–"} · Logo: {textValue(content.logo)||"–"}</small></div>
     <div className="full"><b>Gewählte Erweiterungen</b><span>{stringList(cfg.addons).join(", ")||"Keine"}</span></div>

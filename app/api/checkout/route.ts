@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     if (!isSiteConfig(configurationInput)) return Response.json({ error: "Ungültige Konfiguration." }, { status: 400 });
     const siteConfig = configurationInput as { addons: string[]; care?: boolean; mode?: unknown; pages?: unknown; rush?: unknown; [key:string]: unknown };
     if (!Array.isArray(siteConfig.addons) || siteConfig.addons.some(key => typeof key !== "string")) return Response.json({ error: "Ungültige Erweiterungen." }, { status: 400 });
-    const industryModuleKeys = new Set(["restaurant-reservations","restaurant-menu","restaurant-events","beauty-booking","beauty-team","tattoo-consultation","tattoo-gallery","realestate-listings","realestate-viewings","fitness-classes","fitness-trial","practice-appointments","auto-booking","auto-inventory","trade-estimator","cleaning-request"]);
+    const industryModuleKeys = new Set(["restaurant-reservations","restaurant-menu","restaurant-events","beauty-booking","beauty-team","tattoo-consultation","tattoo-gallery","realestate-listings","realestate-viewings","fitness-classes","fitness-trial","practice-appointments","auto-booking","auto-inventory","trade-estimator","cleaning-request","vouchers","newsletter"]);
     const unknownAddons = siteConfig.addons.filter(key => !(key in addonPrices) && !industryModuleKeys.has(key));
     if (unknownAddons.length) return Response.json({ error: "Unbekannte Erweiterung in der Konfiguration." }, { status: 400 });
     const quoteModules = siteConfig.addons.filter(key => industryModuleKeys.has(key));

@@ -1,8 +1,9 @@
 node_modules/
 .next/
+.sites-runtime/
+tsconfig.tsbuildinfo
 .DS_Store
 **/.DS_Store
 .env
 .env.*
 !.env.example
-.sites-runtime/
