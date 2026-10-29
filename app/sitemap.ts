@@ -1,12 +1,2 @@
-import type { MetadataRoute } from "next";
-
-export default function sitemap(): MetadataRoute.Sitemap {
-  const base = process.env.PUBLIC_SITE_URL?.replace(/\/$/, "");
-  if (!base) return [];
-  return ["", "/templates", "/leistungen", "/beratung", "/kontakt"].map((path, index) => ({
-    url: `${base}${path || "/"}`,
-    lastModified: new Date(),
-    changeFrequency: "monthly" as const,
-    priority: index === 0 ? 1 : 0.6,
-  }));
-}
+import type {MetadataRoute} from "next";import {servicePages} from "@/lib/launch-content";
+export default function sitemap():MetadataRoute.Sitemap{const base=process.env.PUBLIC_SITE_URL?.replace(/\/$/,"");if(base!=="https://jx-studio.de")return [];return ["/","/leistungen","/projekte","/projekte/praxis-am-park","/studio","/kontakt","/impressum","/datenschutz",...servicePages.map(s=>`/leistungen/${s.slug}`)].map((path,i)=>({url:`${base}${path}`,changeFrequency:"monthly" as const,priority:i===0?1:0.6}));}

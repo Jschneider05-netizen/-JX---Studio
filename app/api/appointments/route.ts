@@ -16,6 +16,7 @@ function overlaps(start: Date, end: Date, appointment: { startsAt: Date; duratio
 }
 
 export async function GET(request: Request) {
+  if (process.env.ENABLE_LEGACY_STUDIO !== "true") return Response.json({error:"Funktion nicht freigeschaltet."},{status:404});
   try {
     const params = new URL(request.url).searchParams;
     const now = Date.now();
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (process.env.ENABLE_LEGACY_STUDIO !== "true") return Response.json({error:"Funktion nicht freigeschaltet."},{status:404});
   if (tooManyRequests(request,"appointments",20)) return rateLimited();
   try {
     if (Number(request.headers.get("content-length") || 0) > 20_000) return Response.json({ error: "Anfrage zu groß." }, { status: 413 });

@@ -1,0 +1,8 @@
+import type {Metadata} from "next";
+import Link from "next/link";
+import {notFound} from "next/navigation";
+import {servicePages} from "@/lib/launch-content";
+import {LaunchFrame,PageIntro,ContactCallout} from "@/components/launch-frame";
+export function generateStaticParams(){return servicePages.map(s=>({slug:s.slug}));}
+export async function generateMetadata({params}:{params:Promise<{slug:string}>}):Promise<Metadata>{const {slug}=await params;const s=servicePages.find(s=>s.slug===slug);if(!s)return {};return {title:`${s.title} | JX STUDIO`,description:s.summary,alternates:{canonical:`/leistungen/${slug}`},openGraph:{title:`${s.title} | JX STUDIO`,description:s.summary}};}
+export default async function ServiceDetail({params}:{params:Promise<{slug:string}>}){const{slug}=await params;const s=servicePages.find(s=>s.slug===slug);if(!s)notFound();return <LaunchFrame><main><PageIntro tag={`LEISTUNGEN / ${s.eyebrow}`} title={s.title} description={s.summary}/><section className="launch-article-grid"><div><span className="launch-overline">WORUM ES GEHT</span><h2>Digital, aber sinnvoll.</h2><p>{s.intro}</p></div><div><span className="launch-overline">MÖGLICHE LEISTUNGEN</span><ul className="launch-feature-list">{s.features.map(x=><li key={x}>{x}</li>)}</ul></div></section><section className="launch-outcome"><span className="launch-overline">DAS ZIEL</span><h2>{s.outcome}</h2><p>Leistungsumfang, Zeitrahmen und Konditionen stimmen wir projektbezogen ab. Individuelles Angebot statt unbestätigter Pauschalpreise.</p></section><div className="launch-back"><Link href="/leistungen">← Alle Leistungen</Link></div><ContactCallout/></main></LaunchFrame>}

@@ -17,10 +17,22 @@ async function sendNotification(input: { name:string; email:string; phone:string
 }
 
 export async function POST(request: Request) {
-  if (tooManyRequests(request,"contact",12)) return rateLimited();
+  if (tooManyRequests(request,"contact",8)) return rateLimited();
+  // Block browser-based cross-site submissions; direct API clients remain rate-limited.
+  const origin = request.headers.get("origin");
+  if (origin) {
+    try {
+      const allowed = new URL(request.url).host;
+      const officialHost = process.env.PUBLIC_SITE_URL ? new URL(process.env.PUBLIC_SITE_URL).host : allowed;
+      if (new URL(origin).host !== allowed && new URL(origin).host !== officialHost) return Response.json({error:"Unerlaubter Ursprung."},{status:403});
+    } catch { return Response.json({error:"Unerlaubter Ursprung."},{status:403}); }
+  }
   try {
     if (Number(request.headers.get("content-length") || 0) > 200_000) return Response.json({ error: "Anfrage zu groß." }, { status: 413 });
     const body = (await request.json()) as Record<string, unknown>;
+    if (!body || Array.isArray(body) || typeof body !== "object") return Response.json({error:"Ungültige Anfrage."},{status:400});
+    // Honeypot: the visible form never asks for a website URL.
+    if (typeof body.website === "string" && body.website.trim()) return Response.json({error:"Anfrage konnte nicht verarbeitet werden."},{status:400});
     const requestId = typeof body.requestId === "string" && /^[a-f0-9-]{36}$/i.test(body.requestId) ? body.requestId : null;
     const name = String(body.name ?? "").trim();
     const email = String(body.email ?? "").trim().toLowerCase();
@@ -28,11 +40,14 @@ export async function POST(request: Request) {
     const company = String(body.company ?? "").trim();
     const subject = String(body.subject ?? "Projektanfrage").trim();
     const source = String(body.source ?? (typeof body.configuration === "object" && body.configuration && "source" in body.configuration ? (body.configuration as {source?:unknown}).source : "contact") ?? "contact").slice(0,40);
-    const message = String(body.message ?? "").trim();
+    const budget = typeof body.budget === "string" ? body.budget.trim().slice(0,60) : "";
+    const projectStart = typeof body.projectStart === "string" ? body.projectStart.trim().slice(0,60) : "";
+    const mainMessage = String(body.message ?? "").trim();
+    const message = `${mainMessage}${budget ? `\n\nBudgetrahmen: ${budget}` : ""}${projectStart ? `\nGewünschter Projektbeginn: ${projectStart}` : ""}`;
     const configuration = body.configuration ? JSON.stringify(body.configuration) : null;
     if (configuration && configuration.length > 180000) return Response.json({ error: "Die Konfiguration ist zu groß." }, { status: 413 });
     const estimatedPrice = Number.isFinite(Number(body.estimatedPrice)) ? Math.round(Number(body.estimatedPrice)) : null;
-    if (name.length < 2 || !emailPattern.test(email) || message.length < 10 || message.length > 10000) return Response.json({ error: "Bitte Name, eine gültige E-Mail und eine Nachricht zwischen 10 und 10.000 Zeichen angeben." }, { status: 400 });
+    if (name.length < 2 || name.length > 120 || email.length > 200 || !emailPattern.test(email) || phone.length > 80 || company.length > 160 || subject.length > 160 || mainMessage.length < 10 || message.length > 10000) return Response.json({ error: "Bitte Name, eine gültige E-Mail und eine Nachricht zwischen 10 und 10.000 Zeichen angeben." }, { status: 400 });
 
     let reference = "";
     let savedToDatabase = false;

@@ -45,6 +45,7 @@ function fallback(messages:Message[], old:Lead):Answer {
 }
 
 export async function POST(request:Request) {
+  if (process.env.ENABLE_PUBLIC_ASSISTANT !== "true") return Response.json({error:"Funktion nicht freigeschaltet."},{status:404});
   if(tooManyRequests(request,"assistant",50))return rateLimited();
   try {
     if(Number(request.headers.get("content-length")||0)>30_000)return Response.json({error:"Gespräch zu lang."},{status:413});

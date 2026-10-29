@@ -17,10 +17,11 @@ export async function generateMetadata({ params }: { params: Promise<{ studioVie
   if (!(studioView in views)) return {};
   const item = views[studioView as Slug];
   const base = process.env.PUBLIC_SITE_URL?.replace(/\/$/, "");
-  return { title: item.title, description: item.description, robots: { index: studioView !== "builder" && Boolean(base), follow: Boolean(base) }, alternates: base ? { canonical: `${base}/${studioView}` } : undefined, openGraph: { title: item.title, description: item.description, type: "website" } };
+  return { title: item.title, description: item.description, robots: { index: ["leistungen","kontakt"].includes(studioView) && base === "https://jx-studio.de", follow: base === "https://jx-studio.de" }, alternates: base ? { canonical: `${base}/${studioView}` } : undefined, openGraph: { title: item.title, description: item.description, type: "website" } };
 }
 export default async function StudioView({ params }: { params: Promise<{ studioView: string }> }) {
   const { studioView } = await params;
   if (!(studioView in views)) notFound();
+  if (["templates", "builder", "beratung"].includes(studioView) && process.env.ENABLE_LEGACY_STUDIO !== "true") notFound();
   return <JXStudio initialView={views[studioView as Slug].view} />;
 }

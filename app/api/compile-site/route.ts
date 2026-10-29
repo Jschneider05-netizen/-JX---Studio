@@ -4,6 +4,7 @@ import { rateLimited, tooManyRequests } from "@/lib/rate-limit";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  if (process.env.ENABLE_LEGACY_STUDIO !== "true") return Response.json({error:"Funktion nicht freigeschaltet."},{status:404});
   if (tooManyRequests(request,"compile",20)) return rateLimited();
   try {
     if (Number(request.headers.get("content-length") || 0) > 200_000) return Response.json({ error: "Konfiguration zu groß." }, { status: 413 });

@@ -480,13 +480,14 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
   }, []);
 
   useEffect(() => {
+    if (initialView !== "builder") return;
     const saved = localStorage.getItem("jx-studio-builder-v3") ?? localStorage.getItem("jx-studio-builder-v1");
     if (saved) {
       try { const restored=normaliseBuilder(JSON.parse(saved) as Partial<BuilderState>); queueMicrotask(()=>setBuilderRaw(restored)); } catch { /* ignore damaged drafts */ }
     }
     const phone = isPhoneViewport();
     if (phone) queueMicrotask(()=>{setDevice("mobile");setPreviewDevice("mobile");});
-  }, []);
+  }, [initialView]);
 
   useEffect(() => {
     const onPopState = () => setView(viewFromPath(window.location.pathname));
@@ -495,12 +496,13 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
   }, []);
 
   useEffect(() => {
+    if (view !== "builder") return;
     const timer = window.setTimeout(() => {
       localStorage.setItem("jx-studio-builder-v3", JSON.stringify(builder));
       setSavedAt(Date.now());
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [builder]);
+  }, [builder, view]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -522,6 +524,7 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
   }, [view]);
 
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_ENABLE_STUDIO !== "true") return;
     const context = (document as Document & { modelContext?: { registerTool?: (tool: unknown) => void } }).modelContext;
     if (!context?.registerTool) return;
     try {
@@ -565,12 +568,12 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
       <header className="jx-header">
         <BrandLogo onClick={() => navigate("home")} />
         <nav className={mobileMenu ? "jx-nav open" : "jx-nav"} aria-label="Hauptnavigation">
-          <button className={view === "templates" ? "active" : ""} onClick={() => navigate("templates")}>Templates</button>
-          <button className={view === "services" ? "active" : ""} onClick={() => navigate("services")}>Leistungen</button>
-          <button className={view === "builder" ? "active" : ""} onClick={() => navigate("builder")}>Konfigurator</button>
-          <button className={view === "consultation" ? "active" : ""} onClick={() => navigate("consultation")}>Beratung</button>
-          <button className={view === "contact" ? "active" : ""} onClick={() => navigate("contact")}>Kontakt</button>
-          <button className="jx-nav-cta" onClick={() => navigate("builder")}>Website starten <ArrowRight size={16} /></button>
+          <button onClick={() => navigate("services")}>Leistungen</button>
+          <Link href="/projekte">Projekte</Link>
+          <Link href="/studio">Studio</Link>
+          <Link href="/#ablauf">Ablauf</Link>
+          <button onClick={() => navigate("contact")}>Kontakt</button>
+          <button className="jx-nav-cta" onClick={() => navigate("contact")}>Projekt anfragen <ArrowRight size={16} /></button>
         </nav>
         <button className="jx-mobile-toggle" onClick={() => setMobileMenu((value) => !value)} aria-label={mobileMenu ? "Menü schließen" : "Menü öffnen"} aria-expanded={mobileMenu}>{mobileMenu ? <X /> : <Menu />}</button>
         <span className="scroll-progress" style={{ width: `${scrollProgress}%` }} />
@@ -584,7 +587,7 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
       {view === "builder" && <BuilderPage builder={builder} setBuilder={setBuilder} currentPage={currentPage} activePage={activePage} setActivePage={setActivePage} device={device} setDevice={setDevice} tab={builderTab} setTab={setBuilderTab} selectedTemplate={selectedTemplate} price={oneTimePrice} openCheckout={() => setCheckoutOpen(true)} openTemplates={() => navigate("templates")} undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} savedAt={savedAt} />}
 
       {view !== "builder" && <Footer navigate={navigate} />}
-      {view !== "builder" && <JXAssistant navigate={navigate} />}
+      {process.env.NEXT_PUBLIC_ENABLE_STUDIO === "true" && view !== "builder" && <JXAssistant navigate={navigate} />}
       {showTop && view !== "builder" && <button className="back-to-top" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Nach oben"><ChevronUp /></button>}
 
       <Dialog open={Boolean(templateDialog)} onOpenChange={(open) => !open && setTemplateDialog(null)}>
@@ -725,79 +728,49 @@ function JXAssistant({ navigate }: { navigate: (view: View) => void }) {
 }
 function Home({ navigate }: { navigate: (view: View) => void }) {
   return <main>
-    <section className="hero-section">
-      <div className="hero-orbit one" /><div className="hero-orbit two" />
+    <section className="hero-section launch-hero">
+      <div className="hero-orbit one"/><div className="hero-orbit two"/>
       <div className="hero-copy reveal">
-        <span className="eyebrow"><Sparkles size={14} /> Webdesign & Development aus Bremen</span>
-        <h1>Deine Website.<br /><em>Nicht von der Stange.</em></h1>
-        <p>JX Studio entwickelt Websites, Shops, Kundenportale und individuelle Web-Anwendungen, die hochwertig aussehen und im echten Alltag funktionieren.</p>
-        <div className="hero-actions"><button className="btn-primary" onClick={() => navigate("builder")}>Website konfigurieren <ArrowRight size={18} /></button><button className="btn-secondary" onClick={() => navigate("consultation")}><CalendarDays size={17}/> Gemeinsam planen</button></div>
-        <div className="hero-proof"><span><Check /> Klare Preise</span><span><Check /> Mobile inklusive</span><span><Check /> Persönliche Umsetzung</span></div>
+        <span className="eyebrow">JX STUDIO · DESIGN. DEVELOPMENT. DIGITAL SOLUTIONS.</span>
+        <h1>Digitale Lösungen.<br/><em>Mit Substanz.</em></h1>
+        <p>JX STUDIO gestaltet und entwickelt Websites, Online-Shops, Web-Apps und individuelle Software. Für Unternehmen, die digital mehr vorhaben.</p>
+        <div className="hero-actions"><button className="btn-primary" onClick={() => navigate("contact")}>Projekt unverbindlich anfragen <ArrowRight size={18}/></button><Link className="btn-secondary launch-link-button" href="/projekte">Arbeiten ansehen <ArrowRight size={17}/></Link></div>
+        <div className="hero-proof"><span><Check/> Direkter Ansprechpartner</span><span><Check/> Individuelle Entwicklung</span><span><Check/> Aus Stuhr bei Bremen</span></div>
       </div>
-      <div className="hero-product reveal" aria-label="Vorschau des Website-Konfigurators">
-        <div className="product-top"><i /><i /><i /><span>jxstudio.de / studio</span></div>
-        <div className="product-body"><aside><b>SEITEN</b><span className="active">Startseite</span><span>Leistungen</span><span>Referenzen</span><span>Kontakt</span><button>+ Seite</button></aside><div className="product-canvas"><nav><strong>NORDWERK</strong><span>Leistungen &nbsp; Referenzen &nbsp; Kontakt</span></nav><div className="mock-hero"><small>MEISTERBETRIEB AUS BREMEN</small><h3>Qualität, die<br />man sehen kann.</h3><button>Projekt anfragen</button></div></div><aside className="product-settings"><b>DESIGN</b><label>Akzent <i className="swatch" /></label><label>Rundung <span>20 px</span></label><label>Schrift <span>Modern</span></label><label>Layout <span>Split</span></label></aside></div>
-        <div className="price-float"><span>Aktueller Preis</span><strong>799 €</strong><small>Live berechnet</small></div>
-      </div>
-    </section>
-
-    <section className="logo-strip marquee-strip" aria-label="Leistungsbereiche"><div className="marquee-track">{[0,1].map((copy) => <div className="marquee-copy" key={copy}><span>WEBDESIGN</span><i /><span>DEVELOPMENT</span><i /><span>SOFTWARE</span><i /><span>E-COMMERCE</span><i /><span>KI-CHATBOTS</span><i /><span>DIGITAL SOLUTIONS</span><i /></div>)}</div></section>
-
-    <section className="trust-metrics reveal" aria-label="JX Studio auf einen Blick">
-      <article><CountUp value={27} suffix="+" /><span>branchenspezifische<br />Website-Templates</span></article>
-      <article><CountUp value={100} suffix=" %" /><span>individuell<br />anpassbar</span></article>
-      <article><CountUp value={6} /><span>digitale<br />Leistungsbereiche</span></article>
-      <article><CountUp value={24} prefix="&lt; " suffix=" h" /><span>angestrebte Antwortzeit<br />auf Projektanfragen</span></article>
-    </section>
-
-    <section className="section why-section reveal">
-      <div className="section-head"><span className="eyebrow dark">Warum JX Studio?</span><h2>Direkter arbeiten.<br />Digital weiterdenken.</h2><p>Nicht nur eine hübsche Website abgeben, sondern eine digitale Basis schaffen, die später mit deinem Unternehmen wachsen kann.</p></div>
-      <div className="why-grid">
-        <article><span>01</span><h3>Keine Website von der Stange.</h3><p>Design, Struktur und Technik richten sich nach Unternehmen, Zielgruppe und tatsächlichem Einsatzzweck.</p></article>
-        <article><span>02</span><h3>Ein Ansprechpartner.</h3><p>Von der ersten Idee über Design und Development bis zur späteren Betreuung bleibt die Kommunikation direkt.</p></article>
-        <article><span>03</span><h3>Mehr als Webdesign.</h3><p>Shop, Kundenportal, Konfigurator oder internes Tool können auf derselben digitalen Strategie aufbauen.</p></article>
-        <article><span>04</span><h3>Gebaut, um weiterzuwachsen.</h3><p>Keine technische Sackgasse, sondern eine Grundlage, die neue Seiten, Funktionen und Systeme aufnehmen kann.</p></article>
+      <div className="hero-product launch-visual reveal" aria-label="Illustratives Konzept für ein digitales Business-Dashboard">
+        <div className="product-top"><i/><i/><i/><span>JX STUDIO / DIGITAL WORKSPACE</span></div>
+        <div className="product-body"><aside><b>WORKSPACE</b><span className="active">Übersicht</span><span>Websites</span><span>Web-Apps</span><span>Automationen</span></aside><div className="product-canvas"><nav><strong>JX / DIGITAL</strong><span>DESIGN + TECHNOLOGY</span></nav><div className="mock-hero"><small>KONZEPTVISUALISIERUNG</small><h3>Eine Idee.<br/>Viele Möglichkeiten.</h3><span className="launch-mock-tag">Konzipiert. Gestaltet. Entwickelt.</span></div></div></div>
       </div>
     </section>
-
-    <section className="section light-section reveal">
-      <div className="section-head"><span className="eyebrow dark">Was wir bauen</span><h2>Von der Website<br />bis zum digitalen System.</h2><p>Ein Ansprechpartner für Konzeption, Gestaltung, Entwicklung und Weiterentwicklung. Ohne fünf Agenturen für fünf Aufgaben.</p></div>
-      <div className="service-grid">
-        <article className="service-card featured"><span>01</span><WandSparkles /><h3>Websites</h3><p>Individuell oder auf Basis eines hochwertigen Templates. Responsive, schnell und auf echte Anfragen ausgelegt.</p><button onClick={() => navigate("builder")}>Ab 799 € <ArrowRight /></button></article>
-        <article className="service-card"><span>02</span><ShoppingBag /><h3>Online-Shops</h3><p>Produktwelten, Checkout-Prozesse und klare Nutzerführung für Unternehmen, die online verkaufen wollen.</p><button onClick={() => navigate("services")}>Ab 1.699 € <ArrowRight /></button></article>
-        <article className="service-card"><span>03</span><Code2 /><h3>Software & Webapps</h3><p>Kundenportale, Dashboards, interne Tools und individuelle Funktionen, wenn Standardsoftware nicht reicht.</p><button onClick={() => navigate("services")}>Individuell <ArrowRight /></button></article>
-        <article className="service-card ai-card"><span>04</span><Bot /><h3>KI-Chatbots</h3><p>Individuelle Support- und Lead-Assistenten, die Unternehmenswissen nutzen, Fragen beantworten und Interessenten vorqualifizieren.</p><button onClick={() => navigate("services")}>Live-Demo öffnen <ArrowRight /></button></article>
-      </div>
+    <section className="logo-strip marquee-strip" aria-label="Leistungsspektrum"><div className="marquee-track">{[0,1].map(i=><div key={i} className="marquee-copy"><span>WEBDESIGN</span><i/><span>ONLINE-SHOPS</span><i/><span>WEB-APPS</span><i/><span>SOFTWARE</span><i/><span>KI & AUTOMATISIERUNG</span><i/><span>SEO & GROWTH</span><i/></div>)}</div></section>
+    <section className="section why-section reveal" id="vorteile"><div className="section-head"><span className="eyebrow dark">Warum JX STUDIO?</span><h2>Gute Ideen verdienen<br/>eine bessere Umsetzung.</h2><p>Konzeption, Design und Entwicklung greifen ineinander. Mit direkter Kommunikation und Lösungen, die zum tatsächlichen Bedarf passen.</p></div><div className="why-grid">
+      <article><span>01</span><h3>Individuell statt beliebig.</h3><p>Digitale Lösungen orientieren sich an deinem Geschäftsmodell und deinen Zielen.</p></article>
+      <article><span>02</span><h3>Direkter Kontakt.</h3><p>Persönliche Abstimmung mit dem Gründer, ohne unnötige Abstimmungswege.</p></article>
+      <article><span>03</span><h3>Design trifft Entwicklung.</h3><p>Ein durchdachtes Erscheinungsbild und eine technische Basis, die zusammenpassen.</p></article>
+      <article><span>04</span><h3>Langfristig gedacht.</h3><p>Websites und Anwendungen können mit neuen Anforderungen weiterentwickelt werden.</p></article>
+    </div></section>
+    <section className="section light-section reveal" id="leistungen"><div className="section-head"><span className="eyebrow dark">Leistungen</span><h2>Von der ersten Seite<br/>bis zum ganzen System.</h2><p>Sechs Schwerpunkte. Ein gemeinsames Ziel: digitale Lösungen, die sinnvoll eingesetzt werden können.</p></div>
+      <div className="launch-service-grid">{[
+        ["01","Websites & Webdesign","Unternehmensseiten, Landingpages und Relaunches.","websites-webdesign"],
+        ["02","Online-Shops","E-Commerce mit klarer Produkt- und Kaufstrecke.","online-shops"],
+        ["03","Web-Apps & Portale","Dashboards, Mitgliederbereiche und Kundenplattformen.","web-apps-kundenportale"],
+        ["04","Individuelle Software","Interne Tools, Schnittstellen und digitale Prozesse.","individuelle-software"],
+        ["05","KI & Automatisierung","KI-Assistenten und effizientere Workflows.","ki-automatisierung"],
+        ["06","SEO & Digital Growth","Technische Sichtbarkeit und Conversion-Optimierung.","seo-digital-growth"],
+      ].map(([n,name,description,slug])=><a key={slug} className="launch-service-row" href={`/leistungen/${slug}`}><span>{n}</span><h3>{name}</h3><p>{description}</p><ArrowRight size={20}/></a>)}</div>
     </section>
-
-    <section className="section builder-showcase reveal">
-      <div className="builder-showcase-copy"><span className="eyebrow">JX Studio Builder</span><h2>Du musst dir deine Website nicht vorstellen.<br /><em>Bau sie dir vor.</em></h2><p>Wähle ein Template oder starte frei. Passe Seiten, Texte, Farben, Sektionen und Inhalte direkt im Browser an. Deine komplette Konfiguration landet anschließend als Projektanfrage bei JX Studio.</p><div><button className="btn-primary" onClick={() => navigate("builder")}>Website konfigurieren <ArrowRight size={17} /></button><button className="btn-secondary" onClick={() => navigate("templates")}>Templates entdecken</button></div></div>
-      <div className="builder-showcase-stats"><span><b>LIVE</b> Vorschau ohne Neuladen</span><span><b>DESKTOP + MOBILE</b> getrennt prüfen</span><span><b>AUTOSAVE</b> Änderungen lokal sichern</span></div>
-    </section>
-
-    <DesignDemo />
-
-    <section className="section dark-section process-section reveal">
-      <div className="section-head inverse"><span className="eyebrow">So läuft es</span><h2>Klarer Prozess.<br />Kein Agentur-Nebel.</h2></div>
-      <div className="process-grid">{["Konfigurieren", "Abstimmen", "Umsetzen", "Launchen"].map((title, index) => <article key={title}><b>0{index + 1}</b><h3>{title}</h3><p>{["Template wählen oder frei starten. Seiten, Design, Inhalte und Funktionen zusammenstellen.", "Wir prüfen die Konfiguration, klären offene Punkte und machen daraus ein sauberes Projekt.", "Design, Content und Technik werden professionell fertiggestellt und getestet.", "Nach deiner Freigabe geht alles live. Danach kann JX Care übernehmen."][index]}</p></article>)}</div>
-    </section>
-
-    <section className="section pricing-section reveal">
-      <div className="section-head"><span className="eyebrow dark">Transparente Preise</span><h2>Du weißt vorher,<br />womit du rechnest.</h2></div>
-      <div className="price-cards">
-        <article><span>Template Website</span><h3>799 €</h3><p>Bis 5 Seiten, responsive, Kontaktformular, Basis-SEO und Launch-Unterstützung.</p><ul><li><Check /> Im Studio frei anpassbar</li><li><Check /> Eigene Farben & Inhalte</li><li><Check /> Professionell finalisiert</li></ul><button onClick={() => navigate("builder")}>Jetzt konfigurieren</button></article>
-        <article className="price-highlight"><span>Custom Website</span><h3>ab 1.499 €</h3><p>Individuelles Konzept und Design für Unternehmen, die eine eigenständige digitale Marke brauchen.</p><ul><li><Check /> Individuelles UI-System</li><li><Check /> Strategie & Seitenstruktur</li><li><Check /> Erweiterbare Funktionen</li></ul><button onClick={() => navigate("contact")}>Projekt anfragen</button></article>
-        <article><span>Software / Portal</span><h3>individuell</h3><p>Web-Anwendungen und Portale werden nach Funktionsumfang, Rollen und Datenlogik kalkuliert.</p><ul><li><Check /> Webapps & Dashboards</li><li><Check /> Kundenbereiche</li><li><Check /> Automatisierungen</li></ul><button onClick={() => navigate("services")}>Details ansehen</button></article>
-      </div>
-    </section>
-
-    <section className="section founder-section reveal">
-      <div><span className="eyebrow dark">Founder-led Studio</span><h2>Direkt statt<br />Agenturkarussell.</h2></div>
-      <div className="founder-copy"><p>JX Studio steht für direkte Planung, klares Design und technische Umsetzung ohne unnötige Zwischenstationen. Projekte werden von Anfang an so gedacht, dass Design und Development zusammenpassen.</p><div className="founder-sign"><strong>Joel Schneider</strong><span>Founder · Design & Development</span></div></div>
-    </section>
-
-    <FAQ />
-    <section className="final-cta reveal"><span className="eyebrow">Bereit?</span><h2>Mach aus deiner Idee<br />ein echtes Produkt.</h2><button onClick={() => navigate("builder")}>Studio öffnen <ArrowRight /></button></section>
+    <section className="section dark-section launch-projects reveal" id="projekte"><div className="section-head inverse"><span className="eyebrow">Konzeption & Portfolio</span><h2>Ideen, die sichtbar werden.</h2><p>Ein Blick auf gestalterische und technische Konzepte. Demoprojekte sind ausdrücklich als solche gekennzeichnet.</p></div><Link href="/projekte/praxis-am-park" className="launch-project-card"><span className="launch-project-preview"><span>DEMO · PRAXIS AM PARK</span><strong>Medizin, die den<br/>Menschen sieht.</strong><small>Konzept einer modernen Praxiswebsite</small></span><span className="launch-project-description"><span>01 / KONZEPTARBEIT</span><strong>Praxis am Park</strong><span>Ruhige Editorial-Ästhetik, mobile Navigation und ein beispielhafter digitaler Patientenservice. Fiktive Praxis, keine echte Kundenreferenz.</span><span className="project-link">Projekt ansehen <ArrowRight size={16}/></span></span></Link><Link href="/projekte" className="launch-text-link">Alle Projekte und Konzepte <ArrowRight size={17}/></Link></section>
+    <section className="section dark-section process-section reveal" id="ablauf"><div className="section-head inverse"><span className="eyebrow">Zusammenarbeit</span><h2>Sechs Schritte.<br/>Ein klares Ziel.</h2></div><div className="process-grid launch-process">{[
+        ["Idee und Erstgespräch","Wir sprechen über Ausgangslage, Ziele und Anforderungen."],
+        ["Analyse und Konzeption","Struktur, Funktionen und Machbarkeit werden geplant."],
+        ["Design","Visuelle Richtung, Benutzerführung und Komponenten entstehen."],
+        ["Entwicklung","Die Lösung wird technisch umgesetzt und integriert."],
+        ["Launch","Nach Prüfung und Freigabe erfolgt die Veröffentlichung."],
+        ["Weiterentwicklung","Optimierungen, Erweiterungen und Betreuung nach Bedarf."],
+      ].map(([title,description],index)=><article key={title}><b>{String(index+1).padStart(2,"0")}</b><h3>{title}</h3><p>{description}</p></article>)}</div></section>
+    <section className="section founder-section reveal"><div><span className="eyebrow dark">Studio</span><h2>Persönlich geführt.<br/>Digital gedacht.</h2></div><div className="founder-copy"><p>JX STUDIO ist ein inhabergeführtes Digitalstudio aus Stuhr bei Bremen. Ich begleite Projekte von der ersten Idee über Gestaltung und Entwicklung bis zur technischen Umsetzung.</p><div className="founder-sign"><strong>Joel Sebastian Schneider</strong><span>Gründer & direkter Ansprechpartner</span></div><Link className="launch-text-link" href="/studio">Mehr über das Studio <ArrowRight size={16}/></Link></div></section>
+    <FAQ/>
+    <section className="final-cta reveal"><span className="eyebrow">Projekt starten</span><h2>Dein Vorhaben.<br/>Unser nächster Schritt.</h2><p>Erzähl mir, was du planst. Ich melde mich persönlich zurück.</p><button onClick={() => navigate("contact")}>Unverbindlich anfragen <ArrowRight/></button></section>
   </main>;
 }
 
@@ -815,10 +788,10 @@ function DesignDemo() {
 
 function FAQ() {
   const items = [
-    ["Kann ich ein Template komplett verändern?", "Ja. Template bedeutet hier Startpunkt, nicht Käfig. Farben, Inhalte, Seiten, Sektionen, Bilder und mehrere Designparameter lassen sich im Studio verändern."],
-    ["Ist die Website danach wirklich mobil optimiert?", "Ja. Mobile und Desktop werden getrennt geprüft. Im Studio kannst du bereits zwischen beiden Vorschauen wechseln."],
+    ["Bietet JX STUDIO auch individuelle Lösungen an?", "Ja. Websites, Shops, Portale und Software werden passend zu den jeweiligen Projektanforderungen geplant."],
+    ["Ist die mobile Ansicht im Projekt enthalten?", "Responsive Gestaltung ist Bestandteil der Planung. Umfang und konkrete Anforderungen klären wir im Angebot."],
     ["Kann JX Studio auch individuelle Software bauen?", "Ja. Kundenportale, Dashboards, interne Tools und Web-Anwendungen werden separat nach Funktionsumfang geplant."],
-    ["Muss ich direkt online bezahlen?", "Nein. Du kannst deine Konfiguration unverbindlich anfragen. Bei eindeutig kalkulierbaren Website-Projekten kannst du alternativ direkt online beauftragen und bezahlen."],
+    ["Muss ich direkt etwas bezahlen?", "Nein. Die Projektanfrage ist unverbindlich. Leistungen, Aufwand und Konditionen werden erst im individuellen Angebot festgelegt."],
   ];
   return <section className="section faq-section reveal"><div className="section-head"><span className="eyebrow dark">FAQ</span><h2>Fragen, bevor<br />sie im Chat landen.</h2></div><div className="faq-list">{items.map(([question, answer]) => <details key={question}><summary>{question}<ChevronDown /></summary><p>{answer}</p></details>)}</div></section>;
 }
@@ -845,16 +818,15 @@ function TemplatesPage({ filter, setFilter, onPreview, onChoose, onFreeStart }: 
 
 function ServicesPage({ navigate }: { navigate: (view: View) => void }) {
   const services = [
-    { icon: <WandSparkles />, name: "Template Website", price: "799 €", description: "Der schnelle hochwertige Start mit visueller Konfiguration und professioneller Finalisierung.", details: ["Bis 5 Seiten", "Mobile & Desktop", "Kontaktformular", "Basis SEO", "Studio-Konfiguration"] },
-    { icon: <Palette />, name: "Custom Website", price: "ab 1.499 €", description: "Komplett individuelles Design mit eigener Struktur, Art Direction und Komponenten.", details: ["Individuelles UI", "Strategie", "Content-Struktur", "SEO Basis", "Erweiterbar"] },
-    { icon: <ShoppingBag />, name: "E-Commerce", price: "ab 1.699 €", description: "Shops mit klarer Produktführung, sauberem Checkout und einem System, das wartbar bleibt.", details: ["Produktstruktur", "Checkout", "Responsive", "Tracking", "Technische Einrichtung"] },
-    { icon: <Code2 />, name: "Software & Webapps", price: "individuell", description: "Kundenportale, interne Tools, Dashboards und individuelle digitale Prozesse.", details: ["Rollen & Logins", "Datenmodelle", "Dashboards", "APIs", "Automatisierungen"] },
-    { icon: <Bot />, name: "KI-Chatbots & Support", price: "ab 690 €", description: "Digitale Assistenten für Support, Beratung und Leadgenerierung, passend zur Website und zum Unternehmen.", details: ["Unternehmenswissen", "Support & FAQ", "Lead-Qualifizierung", "Corporate Design", "Optionale API/CRM-Anbindung"] },
-    { icon: <Rocket />, name: "Online-Präsenz & Marketing", price: "nach Umfang", description: "Landingpages, Tracking und technische Grundlagen für Kampagnen und bessere digitale Sichtbarkeit.", details: ["Landingpages", "Tracking", "SEO Struktur", "Conversion UX", "Betreuung"] },
+    ["Websites & Webdesign", "websites-webdesign", "Unternehmenswebsites, Landingpages, Relaunch und responsive Webdesign."],
+    ["Online-Shops", "online-shops", "Digitale Verkaufsflächen mit Produktstruktur, Kaufprozessen und Integrationen."],
+    ["Web-Apps & Kundenportale", "web-apps-kundenportale", "Geschützte Portale, Dashboards und individuell entwickelte Web-Anwendungen."],
+    ["Individuelle Software", "individuelle-software", "Interne Tools, Datenbanksysteme, Desktop-Apps und Schnittstellen."],
+    ["KI & Automatisierung", "ki-automatisierung", "KI-Assistenten, Automatisierung und vernetzte Geschäftsprozesse."],
+    ["SEO & Digital Growth", "seo-digital-growth", "Technische SEO, lokale Sichtbarkeit, Performance und Conversion."],
   ];
-  return <main className="page-main"><section className="page-intro"><span className="eyebrow"><Code2 size={14} /> Leistungen</span><h1>Website ist nur<br /><em>der Anfang.</em></h1><p>JX Studio verbindet Design und Entwicklung. Damit kann aus einer Landingpage später genauso ein Kundenportal oder digitales System werden.</p></section><section className="full-service-list">{services.map((service, index) => <article key={service.name}><span className="service-number">0{index + 1}</span><span className="service-icon">{service.icon}</span><div className="service-main"><h2>{service.name}</h2><p>{service.description}</p></div><ul>{service.details.map((detail) => <li key={detail}><Check /> {detail}</li>)}</ul><strong>{service.price}</strong></article>)}</section><section className="service-end"><h2>Du weißt noch nicht, welche Lösung passt?</h2><button className="btn-primary" onClick={() => navigate("contact")}>Projekt kurz beschreiben <ArrowRight /></button></section></main>;
+  return <main className="page-main"><section className="page-intro"><span className="eyebrow">Leistungen · JX STUDIO</span><h1>Digital gestalten.<br/><em>Digital weiterdenken.</em></h1><p>Von der Website bis zur individuellen Unternehmenssoftware. Jedes Projekt wird nach Anforderungen geplant und individuell angeboten.</p></section><section className="launch-service-grid launch-services-page">{services.map(([title,slug,copy],i)=><a className="launch-service-row" key={slug} href={`/leistungen/${slug}`}><span>{String(i+1).padStart(2,"0")}</span><h2>{title}</h2><p>{copy}</p><ArrowRight size={21}/></a>)}</section><section className="service-end"><h2>Was braucht dein Unternehmen?</h2><p>Wir prüfen gemeinsam, welcher technische Ansatz zu deinem Projekt passt.</p><button className="btn-primary" onClick={()=>navigate("contact")}>Individuelles Angebot anfragen <ArrowRight/></button></section></main>;
 }
-
 
 function RequirementsPanel({ builder, setBuilder }: { builder: BuilderState; setBuilder: BuilderSetter }) {
   const req = normalizeRequirements(builder.requirements);
@@ -1186,9 +1158,8 @@ function ConsultationPage({ navigate }: { navigate: (view: View) => void }) {
 }
 
 function ContactPage() {
-  return <main className="page-main contact-page"><section className="page-intro"><span className="eyebrow">Projektanfrage</span><h1>Erzähl kurz,<br /><em>was du vorhast.</em></h1><p>Website, Shop, Portal oder individuelles Development. Je klarer das Ziel, desto konkreter kann die erste Einschätzung sein.</p></section><section className="contact-layout"><div className="contact-copy"><span>Direkter Kontakt</span>{process.env.NEXT_PUBLIC_CONTACT_EMAIL ? <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL}`}>{process.env.NEXT_PUBLIC_CONTACT_EMAIL}</a> : <span>Schreib uns über das Anfrageformular.</span>}<p>Bremen & Umgebung<br />Projekte deutschlandweit</p><div><b>Was danach passiert</b><ol><li><span>1</span>Die Anfrage wird geprüft und strukturiert.</li><li><span>2</span>Du bekommst eine persönliche Rückmeldung.</li><li><span>3</span>Nach der Abstimmung folgt ein verbindliches Angebot.</li></ol></div></div><InquiryForm /></section></main>;
+  return <main className="page-main contact-page"><section className="page-intro"><span className="eyebrow">Kontakt · Projektanfrage</span><h1>Erzähl mir,<br/><em>was du vorhast.</em></h1><p>Webdesign, Shop, Software oder digitale Abläufe. Eine unverbindliche Anfrage ist der erste Schritt zu einer passenden Lösung.</p></section><section className="contact-layout"><div className="contact-copy"><span>Direkter Kontakt</span><a href="mailto:kontakt@jx-studio.de">kontakt@jx-studio.de</a><a href="tel:+4942184827081">+49 421 84827081</a><p>JX STUDIO · Stuhr bei Bremen<br/>Deutschlandweite Zusammenarbeit</p><div><b>So geht es weiter</b><ol><li><span>1</span>Du beschreibst kurz dein Projekt.</li><li><span>2</span>Ich prüfe die Angaben und melde mich persönlich.</li><li><span>3</span>Wir besprechen Umfang und ein individuelles Angebot.</li></ol></div></div><InquiryForm/></section></main>;
 }
-
 
 function DirectCheckout({ configuration, estimatedPrice, blocked = false, blockedReason = "" }: { configuration: BuilderState; estimatedPrice: number; blocked?: boolean; blockedReason?: string }) {
   const [loading, setLoading] = useState(false);
@@ -1217,9 +1188,10 @@ function InquiryForm({ configuration, estimatedPrice, onSuccess, compact = false
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (sending) return;
+    const formElement = event.currentTarget;
     requestId.current ??= crypto.randomUUID();
     const consentInput = event.currentTarget.elements.namedItem("consent") as HTMLInputElement | null;
-    if (!consentInput?.checked) { toast.error("Bitte bestätige die Speicherung deiner Angaben."); return; }
+    if (!consentInput?.checked) { toast.error("Bitte bestätige den Datenschutzhinweis."); return; }
     setSending(true); setSuccess(null);
     const form = new FormData(event.currentTarget);
     const payload = Object.fromEntries(form.entries());
@@ -1228,22 +1200,22 @@ function InquiryForm({ configuration, estimatedPrice, onSuccess, compact = false
       const response = await fetch("/api/contact", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...payload, message: String(payload.message || "").trim() || (safeConfiguration ? "Ich möchte meine konfigurierte Website unverbindlich besprechen." : ""), requestId: requestId.current, source: safeConfiguration ? "builder" : "contact", configuration: safeConfiguration, estimatedPrice }) });
       const data = await response.json() as { error?: string; reference?: string; emailSent?: boolean };
       if (!response.ok) throw new Error(data.error || "Senden fehlgeschlagen");
-      if (data.emailSent === false) toast.warning("Anfrage gespeichert. Die E-Mail-Benachrichtigung ist aktuell noch nicht aktiv.");
-      setSuccess(data.reference ?? "Gesendet"); event.currentTarget.reset(); toast.success("Deine Anfrage wurde an JX Studio gesendet."); onSuccess?.();
+      if (data.emailSent === false) toast.warning("Anfrage sicher gespeichert. Eine zusätzliche E-Mail-Benachrichtigung ist nicht bestätigt.");
+      setSuccess(data.reference ?? "Gesendet"); formElement.reset(); toast.success("Deine Anfrage ist bei JX STUDIO eingegangen."); onSuccess?.();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Bitte versuche es erneut."); }
     finally { setSending(false); }
   };
   if (success) return <div className="form-success"><Check /><h3>Anfrage angekommen.</h3><p>Referenz: <b>{success}</b><br />Wir melden uns persönlich bei dir.</p></div>;
   return <form className={compact ? "inquiry-form compact" : "inquiry-form"} onSubmit={submit}>
     <div className="form-grid"><label>Dein Name *<input name="name" required minLength={2} autoComplete="name" /></label><label>E-Mail *<input name="email" required type="email" autoComplete="email" /></label></div>
-    <div className="form-grid"><label>Unternehmen<input name="company" autoComplete="organization" /></label><label>Telefon<input name="phone" type="tel" autoComplete="tel" /></label></div>
+    <div className="form-grid"><label>Unternehmen (optional)<input name="company" maxLength={160} autoComplete="organization" /></label><label>Telefon (optional)<input name="phone" maxLength={80} type="tel" autoComplete="tel" /></label></div>
     {!configuration && <label>Worum geht es?<select name="subject" defaultValue="Website"><option>Website</option><option>Online-Shop</option><option>Software / Webapp</option><option>Kundenportal</option><option>Online-Marketing</option><option>Betreuung</option><option>Sonstiges</option></select></label>}
-    <label>{configuration ? "Zusätzliche Nachricht (optional)" : "Nachricht *"}<textarea name="message" required={!configuration} minLength={configuration ? undefined : 10} rows={compact ? 4 : 7} placeholder={configuration ? "Gibt es noch etwas, das wir wissen sollten?" : "Was möchtest du erreichen? Welche Seiten oder Funktionen brauchst du?"} /></label>
-    <label className="consent"><input type="checkbox" name="consent" required /><span>Ich stimme zu, dass meine Angaben zur Bearbeitung der Anfrage gespeichert werden.</span></label>
+    <div className="form-grid"><label>Budget (optional)<select name="budget" defaultValue=""><option value="">Noch offen</option><option>Unter 2.500 €</option><option>2.500–5.000 €</option><option>5.000–10.000 €</option><option>Über 10.000 €</option></select></label><label>Gewünschter Projektbeginn (optional)<input name="projectStart" maxLength={50} placeholder="z. B. Frühjahr 2027" /></label></div><label className="jx-honeypot" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" /></label><label>{configuration ? "Zusätzliche Nachricht (optional)" : "Nachricht *"}<textarea name="message" required={!configuration} minLength={configuration ? undefined : 10} rows={compact ? 4 : 7} placeholder={configuration ? "Gibt es noch etwas, das wir wissen sollten?" : "Was möchtest du erreichen? Welche Seiten oder Funktionen brauchst du?"} /></label>
+    <label className="consent"><input type="checkbox" name="consent" required /><span>Ich habe die <Link href="/datenschutz">Datenschutzhinweise</Link> zur Bearbeitung meiner Anfrage gelesen.</span></label>
     <button className="btn-primary submit-button" disabled={sending}>{sending ? "Wird gesendet …" : configuration ? "Konfiguration unverbindlich anfragen" : "Anfrage senden"} <ArrowRight size={17} /></button>
   </form>;
 }
 
 function Footer({ navigate }: { navigate: (view: View) => void }) {
-  return <footer className="main-footer"><div><BrandLogo onClick={() => navigate("home")} /><p>Webdesign, Development und digitale Systeme.<br />Entwickelt in Bremen.</p></div><div><b>Entdecken</b><button onClick={() => navigate("templates")}>Templates</button><button onClick={() => navigate("services")}>Leistungen</button><button onClick={() => navigate("builder")}>Studio</button><button onClick={() => navigate("consultation")}>Persönliche Beratung</button></div><div><b>Kontakt</b>{process.env.NEXT_PUBLIC_CONTACT_EMAIL ? <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL}`}>{process.env.NEXT_PUBLIC_CONTACT_EMAIL}</a> : <button onClick={() => navigate("contact")}>Kontakt aufnehmen</button>}<span>Bremen · Deutschlandweit</span><Link className="admin-link" href="/admin">Projekt-Eingang</Link></div><div className="footer-bottom"><span>© 2026 JX Studio</span><span>{process.env.NEXT_PUBLIC_IMPRINT_URL ? <a href={process.env.NEXT_PUBLIC_IMPRINT_URL}>Impressum</a> : "Impressum vor Launch ergänzen"} · {process.env.NEXT_PUBLIC_PRIVACY_URL ? <a href={process.env.NEXT_PUBLIC_PRIVACY_URL}>Datenschutz</a> : "Datenschutz vor Launch ergänzen"}</span></div></footer>;
+  return <footer className="main-footer"><div><BrandLogo onClick={()=>navigate("home")}/><p>Design. Development. Digital Solutions.<br/>Inhabergeführt aus Stuhr bei Bremen.</p></div><div><b>Entdecken</b><button onClick={()=>navigate("services")}>Leistungen</button><Link href="/projekte">Projekte</Link><Link href="/studio">Studio</Link><Link href="/#ablauf">Ablauf</Link></div><div><b>Kontakt</b><a href="mailto:kontakt@jx-studio.de">kontakt@jx-studio.de</a><a href="tel:+4942184827081">+49 421 84827081</a><span>Albert-Schweitzer-Straße 6<br/>28816 Stuhr · Deutschland</span></div><div className="footer-bottom"><span>© 2026 JX STUDIO · Joel Sebastian Schneider</span><span><Link href="/impressum">Impressum</Link> · <Link href="/datenschutz">Datenschutz</Link></span></div></footer>;
 }

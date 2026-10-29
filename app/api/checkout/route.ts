@@ -8,7 +8,7 @@ function checkoutAvailability() {
   const terms = process.env.PUBLIC_LEGAL_TERMS_URL || "";
   const privacy = process.env.PUBLIC_PRIVACY_URL || "";
   const validUrl = (value: string) => { try { return new URL(value).protocol === "https:"; } catch { return false; } };
-  const enabled = process.env.DIRECT_CHECKOUT_ENABLED === "true" && Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET && process.env.DATABASE_URL) && validUrl(terms) && validUrl(privacy);
+  const enabled = process.env.ENABLE_LEGACY_STUDIO === "true" && process.env.DIRECT_CHECKOUT_ENABLED === "true" && Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET && process.env.DATABASE_URL) && validUrl(terms) && validUrl(privacy);
   return { enabled, terms: enabled ? terms : "", privacy: enabled ? privacy : "" };
 }
 

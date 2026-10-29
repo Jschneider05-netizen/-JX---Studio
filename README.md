@@ -1,5 +1,7 @@
 # JX Studio
 
+> **Launch-Kandidat 29.10.2026:** Aktueller Lieferstand, Einschränkungen und Render-Anleitung in [`RELEASE_2026_10_29.md`](RELEASE_2026_10_29.md); Git-Checkpoint-Verlauf in [`PROGRESS.md`](PROGRESS.md). Die öffentlich erreichbare Domain liefert noch eine ältere Version.
+
 Bestehende Next.js-Produktionsanwendung mit 27 Template-Varianten aus neun Branchen, Website-Builder, Projektanfragen, Beratungsterminen, Adminbereich und Kundenportal. Das Projektverzeichnis heißt `JX_Studio_FINAL`.
 
 ## Lokal starten

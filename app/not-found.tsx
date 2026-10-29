@@ -1,0 +1,1 @@
+import Link from "next/link";import {LaunchFrame} from "@/components/launch-frame";export default function NotFound(){return <LaunchFrame><main className="launch-404"><span>404 · SEITE NICHT GEFUNDEN</span><h1>Hier endet die Route.<br/>Nicht die Idee.</h1><p>Die angeforderte Seite gibt es nicht. Zurück zur Übersicht.</p><Link href="/">Zur Startseite ↗</Link></main></LaunchFrame>}
