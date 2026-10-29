@@ -13,14 +13,7 @@ export default function PraxisDemo() {
         flexWrap: "wrap"
       }}>
         <strong>JX STUDIO · PRAXIS AM PARK</strong>
-        <a
-          href="https://praxis-am-park-jx.ample-gem-3729.chatgpt.site/"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "white" }}
-        >
-          Demo direkt öffnen ↗
-        </a>
+        
       </div>
 
       <iframe
