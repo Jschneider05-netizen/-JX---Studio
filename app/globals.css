@@ -983,3 +983,22 @@ html, body { background: var(--jx-bg); }
 
 /* Rechtliche Seiten, separat vom unveränderten ursprünglichen Agenturdesign */
 .legal-page{min-height:100vh;background:#080a0c;color:#eaecef;padding:clamp(30px,6vw,90px) 22px;font-family:inherit}.legal-inner{max-width:850px;margin:auto;line-height:1.75}.legal-inner h1{font-size:clamp(2.5rem,6vw,5rem);line-height:1.1;margin:24px 0 40px}.legal-inner h2{font-size:1.35rem;margin:38px 0 10px}.legal-inner p{color:#c1c6cb;overflow-wrap:anywhere}.legal-inner a{color:#fff;text-decoration:underline;text-underline-offset:4px}.legal-kicker{letter-spacing:.18em;font-size:.7rem}
+
+/* JX STUDIO – Rechtliche Footer-Links */
+.main-footer .footer-bottom {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.main-footer .footer-bottom a {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: #ffffff !important;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
