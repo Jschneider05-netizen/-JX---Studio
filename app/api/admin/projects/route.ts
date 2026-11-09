@@ -1,8 +1,10 @@
-import { desc, eq } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+import { readJsonObject, RequestBodyError } from "@/lib/request-body";
+import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { projects, projectVersions } from "@/db/schema";
+import { projects, projectVersions, inquiries } from "@/db/schema";
 
-const authorized = (request: Request) => Boolean(process.env.JXSTUDIO_ADMIN_KEY) && request.headers.get("x-admin-key") === process.env.JXSTUDIO_ADMIN_KEY;
+import { authorized } from "@/lib/admin-auth";
 const statuses = new Set(["draft", "paid", "planning", "in_progress", "review", "completed", "on_hold", "cancelled"]);
 const approvals = new Set(["pending", "approved", "changes_requested"]);
 
@@ -38,4 +40,25 @@ export async function PATCH(request: Request) {
     });
     return result ? Response.json({ ok: true, ...result }) : Response.json({ error: "Projekt nicht gefunden." }, { status: 404 });
   } catch (error) { console.error("admin_project_update_failed", error); return Response.json({ error: "Projekt konnte nicht gespeichert werden." }, { status: 503 }); }
+}
+
+// Creating a managed project is an explicit admin action, independent of payments.
+export async function POST(request: Request) {
+  if (!authorized(request)) return Response.json({error:"Nicht autorisiert."},{status:401});
+  try {
+    const body=await readJsonObject(request,4000);
+    const inquiryId=Number(body.inquiryId);
+    if (!Number.isInteger(inquiryId)||inquiryId<=0) return Response.json({error:"Ungültige Anfrage-ID."},{status:400});
+    const project=await getDb().transaction(async tx=>{
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(8394108)`);
+      const [existing]=await tx.select().from(projects).where(eq(projects.inquiryId,inquiryId)).limit(1);
+      if (existing) return existing;
+      const [inquiry]=await tx.select().from(inquiries).where(eq(inquiries.id,inquiryId)).limit(1);
+      if (!inquiry) return null;
+      const [created]=await tx.insert(projects).values({inquiryId,customerEmail:inquiry.email,name:inquiry.company||inquiry.name,configuration:inquiry.configuration||"{}",portalToken:randomBytes(24).toString("hex"),status:"planning"}).returning();
+      await tx.insert(projectVersions).values({projectId:created.id,version:1,configuration:created.configuration,note:"Aus Projektanfrage angelegt"});
+      return created;
+    });
+    return project?Response.json({project},{status:201,headers:{"cache-control":"private, no-store"}}):Response.json({error:"Anfrage nicht gefunden."},{status:404});
+  } catch(error) { return Response.json({error:error instanceof RequestBodyError?error.message:"Projekt konnte nicht angelegt werden."},{status:error instanceof RequestBodyError?error.status:503}); }
 }

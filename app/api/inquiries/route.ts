@@ -1,3 +1,4 @@
+import { authorized } from "@/lib/admin-auth";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { inquiries, orders } from "@/db/schema";
@@ -7,8 +8,7 @@ const allowedStatuses = new Set(["Neu", "Kontaktiert", "In Klärung", "Angebot",
 function authorize(request: Request) {
   const configured = process.env.JXSTUDIO_ADMIN_KEY;
   if (!configured) return { ok: false as const, status: 503, error: "Der Projekt-Eingang ist noch nicht freigeschaltet. JXSTUDIO_ADMIN_KEY fehlt." };
-  const supplied = request.headers.get("x-admin-key") ?? "";
-  if (supplied !== configured) return { ok: false as const, status: 401, error: "Zugangsschlüssel ungültig." };
+  if (!authorized(request)) return { ok: false as const, status: 401, error: "Zugangsschlüssel ungültig." };
   return { ok: true as const };
 }
 
@@ -35,7 +35,8 @@ export async function PATCH(request: Request) {
     const status = String(body.status ?? "");
     if (!Number.isInteger(id) || id <= 0 || !allowedStatuses.has(status)) return Response.json({ error: "Ungültige Statusänderung." }, { status: 400 });
     const db = getDb();
-    await db.update(inquiries).set({ status }).where(eq(inquiries.id, id));
+    const updated = await db.update(inquiries).set({ status }).where(eq(inquiries.id, id)).returning({ id: inquiries.id });
+    if (!updated.length) return Response.json({ error: "Anfrage nicht gefunden." }, { status: 404 });
     return Response.json({ ok: true });
   } catch (error) {
     console.error("inquiry_status_failed", error);

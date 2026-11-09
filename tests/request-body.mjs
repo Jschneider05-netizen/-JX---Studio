@@ -1,0 +1,15 @@
+import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+const source=await readFile(new URL('../lib/request-body.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {readJsonObject}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+const request=(body,type='application/json')=>new Request('http://localhost/test',{method:'POST',headers:{'content-type':type},body});
+assert.deepEqual(await readJsonObject(request('{"valid":true}'),20),{valid:true});
+await assert.rejects(()=>readJsonObject(request('{'),20),e=>e.status===400);
+await assert.rejects(()=>readJsonObject(request('null'),20),e=>e.status===400);
+await assert.rejects(()=>readJsonObject(request('[]'),20),e=>e.status===400);
+await assert.rejects(()=>readJsonObject(request('{}','text/plain'),20),e=>e.status===415);
+const stream=new ReadableStream({start(c){c.enqueue(new TextEncoder().encode('{"data":"'));c.enqueue(new TextEncoder().encode('x'.repeat(100)));c.close();}});
+await assert.rejects(()=>readJsonObject(new Request('http://localhost/test',{method:'POST',headers:{'content-type':'application/json'},body:stream,duplex:'half'}),20),e=>e.status===413);
+console.log('6 request body checks passed, including chunked oversized body without Content-Length.');

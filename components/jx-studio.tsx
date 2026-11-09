@@ -19,7 +19,6 @@ import {
   Palette,
   Plus,
   Redo2,
-  Rocket,
   ShoppingBag,
   Smartphone,
   Tablet,
@@ -45,7 +44,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster, toast } from "sonner";
 import Link from "next/link";
-import { addonPrices, projectPrice } from "@/lib/pricing";
+import { projectTypes, projectIndustries, digitalServices, businessSolutions } from "@/lib/services";
+import { projectPrice } from "@/lib/pricing";
 import { defaultRequirements, normalizeRequirements, requirementsCompleteness, type RequirementsState } from "@/lib/jx-requirements";
 
 type View = "home" | "templates" | "builder" | "services" | "consultation" | "contact";
@@ -98,6 +98,7 @@ type Template = {
 };
 
 export type BuilderState = {
+  projectBrief?: { projectType: string; industry: string; start: string; budget: string; description: string };
   templateId: string;
   /** Frozen visual layout so Builder and production export cannot diverge. */
   templateLayout?: TemplateLayout;
@@ -439,6 +440,7 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [showTop, setShowTop] = useState(false);
+  const [storageReady, setStorageReady] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const history = useRef<BuilderState[]>([]);
   const future = useRef<BuilderState[]>([]);
@@ -480,10 +482,13 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
   }, []);
 
   useEffect(() => {
+    try {
     const saved = localStorage.getItem("jx-studio-builder-v3") ?? localStorage.getItem("jx-studio-builder-v1");
     if (saved) {
       try { const restored=normaliseBuilder(JSON.parse(saved) as Partial<BuilderState>); queueMicrotask(()=>setBuilderRaw(restored)); } catch { /* ignore damaged drafts */ }
     }
+    } catch { toast.error("Lokaler Speicher ist nicht verfügbar. Bitte sichere dein Projekt als Datei."); }
+    queueMicrotask(()=>setStorageReady(true));
     const phone = isPhoneViewport();
     if (phone) queueMicrotask(()=>{setDevice("mobile");setPreviewDevice("mobile");});
   }, []);
@@ -495,12 +500,17 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      localStorage.setItem("jx-studio-builder-v3", JSON.stringify(builder));
-      setSavedAt(Date.now());
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [builder]);
+    if (!storageReady || view !== "builder") return;
+    const persist = () => {
+      try { localStorage.setItem("jx-studio-builder-v3", JSON.stringify(builder)); setSavedAt(Date.now()); }
+      catch { setSavedAt(null); toast.error("Automatisches Speichern fehlgeschlagen. Bitte Projektdatei sichern.", { id: "storage-error" }); }
+    };
+    const timer = window.setTimeout(persist, 350);
+    // Flush the newest state when leaving before the debounce finishes.
+    window.addEventListener("pagehide", persist);
+    window.addEventListener("beforeunload", persist);
+    return () => { window.clearTimeout(timer); window.removeEventListener("pagehide", persist); window.removeEventListener("beforeunload", persist); };
+  }, [builder, storageReady, view]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -540,6 +550,10 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   };
 
+  const configureService = (projectType: string, description: string) => {
+    setBuilder(prev => ({ ...prev, projectBrief: { projectType, industry: prev.projectBrief?.industry || "", start: prev.projectBrief?.start || "", budget: prev.projectBrief?.budget || "", description } }));
+    setBuilderTab("features"); navigate("builder");
+  };
   const chooseTemplate = (template: Template) => {
     const profile = profileFor(template.category);
     setBuilder((prev) => ({ ...prev, templateId: template.id, templateLayout: template.layout, mode: "template", company: template.name, industry: template.category, accent: template.accent, secondary: template.secondary ?? `${template.accent}33`, dark: template.dark, surface: template.surface ?? prev.surface, text: template.text ?? prev.text, font: template.font ?? prev.font, buttonStyle: template.buttonStyle ?? prev.buttonStyle, heroAlign: template.heroAlign ?? prev.heroAlign, radius: template.radius ?? prev.radius, pages: pagesFor(profile), customText: {}, content: { kicker: profile.kicker, headline: template.headline, copy: profile.heroCopy, cta: profile.cta, image: template.image } }));
@@ -578,7 +592,7 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
 
       {view === "home" && <Home navigate={navigate} />}
       {view === "templates" && <TemplatesPage filter={filter} setFilter={setFilter} onPreview={openTemplatePreview} onChoose={chooseTemplate} onFreeStart={startFree} />}
-      {view === "services" && <ServicesPage navigate={navigate} />}
+      {view === "services" && <ServicesPage navigate={navigate} configure={configureService} />}
       {view === "consultation" && <ConsultationPage navigate={navigate} />}
       {view === "contact" && <ContactPage />}
       {view === "builder" && <BuilderPage builder={builder} setBuilder={setBuilder} currentPage={currentPage} activePage={activePage} setActivePage={setActivePage} device={device} setDevice={setDevice} tab={builderTab} setTab={setBuilderTab} selectedTemplate={selectedTemplate} price={oneTimePrice} openCheckout={() => setCheckoutOpen(true)} openTemplates={() => navigate("templates")} undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} savedAt={savedAt} />}
@@ -613,12 +627,12 @@ export default function JXStudio({ initialView = "home" }: { initialView?: View 
       <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
         <DialogContent className="checkout-dialog">
           <div className="checkout-hero"><span className="checkout-kicker"><BadgeCheck size={15}/> Dein JX Projekt</span><DialogHeader><DialogTitle>Von deiner Konfiguration zum fertigen Launch.</DialogTitle></DialogHeader><p>Deine Auswahl bleibt vollständig am Projekt gespeichert. Nach dem Auftrag folgen technischer Build, Qualitätsprüfung, persönliche Finalisierung und deine Freigabe.</p></div>
-          <div className="checkout-project"><div><small>PROJEKT</small><b>{builder.company || "Neue Website"}</b><span>{builder.industry} · {builder.pages.length} Seiten · {builder.addons.length} Erweiterungen</span></div><div className="checkout-total"><span>Einmaliger Projektpreis</span><strong>{money(oneTimePrice)}</strong>{builder.care && <small>+ 49,99 € / Monat JX Care</small>}</div></div>
-          <div className="checkout-readiness"><div><b>Projektangaben {projectCompletion.percent}% vollständig</b><span>{projectCompletion.ready ? "Deine Konfiguration ist bereit für eine Anfrage." : `${projectCompletion.missing.length} Angaben kannst du noch ergänzen.`}</span></div>{!projectCompletion.ready&&<ul>{projectCompletion.missing.slice(0,6).map(item=><li key={item}>{item}</li>)}</ul>}{projectCompletion.requiresQuote&&<p>Individuelle Branchenfunktionen werden persönlich kalkuliert.</p>}</div>
+          <div className="checkout-project"><div><small>PROJEKT</small><b>{builder.company || "Neue Website"}</b><span>{builder.industry} · {builder.pages.length} Seiten · {builder.addons.length} Erweiterungen</span></div><div className="checkout-total"><span>Preis nach Abstimmung</span><strong>Individuelles Angebot</strong>{builder.care && <small>Wartung auf Anfrage</small>}</div></div>
+          <dl className="project-summary"><dt>Projekttyp</dt><dd>{builder.projectBrief?.projectType || "Unternehmenswebsite"}</dd><dt>Branche</dt><dd>{builder.projectBrief?.industry || builder.industry}</dd><dt>Template</dt><dd>{selectedTemplate.name}</dd><dt>Design</dt><dd>{builder.font} · {builder.accent} · {builder.buttonStyle}</dd><dt>Seiten</dt><dd>{builder.pages.map(page=>page.name).join(", ")}</dd><dt>Zusatzfunktionen</dt><dd>{builder.addons.map(key=>addonLabels[key] || key).join(", ") || "Keine ausgewählt"}</dd><dt>Projektbeginn</dt><dd>{builder.projectBrief?.start || "Nach Absprache"}</dd><dt>Budget</dt><dd>{builder.projectBrief?.budget || "Nicht angegeben"}</dd><dt>Beschreibung</dt><dd>{builder.projectBrief?.description || "Im Gespräch zu klären"}</dd><dt>Betreuung</dt><dd>{builder.care ? "Wartung gewünscht" : "Nach Absprache"}</dd></dl><div className="checkout-readiness"><div><b>Projektangaben {projectCompletion.percent}% vollständig</b><span>{projectCompletion.ready ? "Deine Konfiguration ist bereit für eine Anfrage." : `${projectCompletion.missing.length} Angaben kannst du noch ergänzen.`}</span></div>{!projectCompletion.ready&&<ul>{projectCompletion.missing.slice(0,6).map(item=><li key={item}>{item}</li>)}</ul>}{projectCompletion.requiresQuote&&<p>Individuelle Branchenfunktionen werden persönlich kalkuliert.</p>}</div>
           <div className="checkout-choice-intro"><b>Dein Projekt unverbindlich anfragen</b><span>Deine vollständige Konfiguration wird mitgesendet. Eine Zahlung ist nicht erforderlich.</span></div>
           <div className="checkout-choice-grid"><div className="checkout-choice-card"><span className="choice-label">PERSÖNLICHE BERATUNG</span><h3>Projekt gemeinsam besprechen</h3><p>Du erhältst nach Prüfung deiner Anforderungen ein individuelles Angebot.</p><div className="choice-actions"><button className="btn-primary" onClick={()=>{setCheckoutOpen(false);navigate("consultation")}}><CalendarDays size={16}/> Beratung wählen</button><a href="#checkout-inquiry" className="btn-secondary">Konfiguration anfragen</a></div></div></div>
           <div className="checkout-flow"><span><b>01</b> Anfrage</span><i/><span><b>02</b> Angebot</span><i/><span><b>03</b> Umsetzung</span><i/><span><b>04</b> Launch</span></div>
-          <div id="checkout-inquiry" className="checkout-inquiry-section"><div className="checkout-divider"><span>Konfiguration unverbindlich senden</span></div><InquiryForm configuration={builder} estimatedPrice={oneTimePrice} onSuccess={() => setCheckoutOpen(false)} compact /></div>
+          <div id="checkout-inquiry" className="checkout-inquiry-section"><div className="checkout-divider"><span>Konfiguration unverbindlich senden</span></div><InquiryForm configuration={builder} estimatedPrice={undefined} onSuccess={() => setCheckoutOpen(false)} compact /></div>
         </DialogContent>
       </Dialog>
     </div>
@@ -701,7 +715,7 @@ function JXAssistant({ navigate }: { navigate: (view: View) => void }) {
     try {
       const transcript = messages.slice(-12).map(m=>`${m.role === "user" ? "Interessent" : "JX Assistant"}: ${m.text}`).join("\n\n");
       const summary = lead.summary || `Projektart: ${lead.projectType || "offen"}. Standort: ${lead.location || "nicht genannt"}. Budget: ${lead.budget || "nicht genannt"}. Zeitraum: ${lead.timeframe || "nicht genannt"}.`;
-      const res = await fetch("/api/contact", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ requestId:leadRequestId.current, source:"jx-assistant", name:lead.name, email:lead.email, phone:lead.phone||"", company:lead.company||"", subject:`KI-qualifizierte Projektanfrage · ${lead.projectType || "Projekt"}`, message:`${summary}\n\nVom JX Assistant erfasste Angaben:\nStandort: ${lead.location||"–"}\nZiele: ${(lead.goals||[]).join(", ") || "–"}\nFunktionen: ${(lead.features||[]).join(", ") || "–"}\nBudget: ${lead.budget||"–"}\nZeitraum: ${lead.timeframe||"–"}\n\nGesprächsauszug:\n${transcript}`, configuration:{source:"jx-assistant", lead}, estimatedPrice:null }) });
+      const res = await fetch("/api/contact", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ consent:true, requestId:leadRequestId.current, source:"jx-assistant", name:lead.name, email:lead.email, phone:lead.phone||"", company:lead.company||"", subject:`KI-qualifizierte Projektanfrage · ${lead.projectType || "Projekt"}`, message:`${summary}\n\nVom JX Assistant erfasste Angaben:\nStandort: ${lead.location||"–"}\nZiele: ${(lead.goals||[]).join(", ") || "–"}\nFunktionen: ${(lead.features||[]).join(", ") || "–"}\nBudget: ${lead.budget||"–"}\nZeitraum: ${lead.timeframe||"–"}\n\nGesprächsauszug:\n${transcript}`, configuration:{source:"jx-assistant", lead}, estimatedPrice:null }) });
       const data = await res.json() as { error?: string; reference?: string };
       if (!res.ok) throw new Error(data.error || "Versand fehlgeschlagen");
       setHandoff(false); setConfirmLead(false);
@@ -713,10 +727,10 @@ function JXAssistant({ navigate }: { navigate: (view: View) => void }) {
   return <div className={`jx-assistant ${open ? "open" : ""}`}>
     {open && <div className="assistant-panel" role="dialog" aria-label="JX Assistant">
       <div className="assistant-head"><div><span className="assistant-mark"><Bot size={18}/></span><span><b>JX Assistant</b><small><i/> Digitaler Projektberater</small></span></div><button onClick={() => setOpen(false)} aria-label="Chat schließen"><X size={18}/></button></div>
-      <div className="assistant-messages" ref={scroller}>{messages.map((m,i)=><div key={i} className={`assistant-message ${m.role}`}>{m.text}</div>)}{typing&&<div className="assistant-message assistant typing"><span/><span/><span/><em>tippt</em></div>}{handoff&&!typing&&<div className="assistant-handoff"><b>Das klingt bereits konkret.</b><span>Ich habe genug Informationen, um daraus eine Projektanfrage zu machen. Möchtest du, dass ich sie direkt an den Projektleiter weitergebe?</span><div><button onClick={prepareLead}>Anfrage weitergeben</button><button onClick={()=>setHandoff(false)}>Noch etwas besprechen</button></div></div>}{confirmLead&&!typing&&<div className="assistant-handoff assistant-confirm"><b>Projektanfrage prüfen</b><span><strong>{lead.projectType||"Digitalprojekt"}</strong>{lead.company?` · ${lead.company}`:""}{lead.location?` · ${lead.location}`:""}</span><span>Budget: {lead.budget||"nicht genannt"} · Zeitraum: {lead.timeframe||"nicht genannt"}</span><span>Funktionen: {(lead.features||[]).join(", ")||"noch offen"}</span><span>Kontakt: {lead.name} · {lead.email}{lead.phone?` · ${lead.phone}`:""}</span><small>Erst mit „Anfrage verbindlich senden“ werden diese Angaben an JX Studio übermittelt.</small><div><button onClick={submitLead} disabled={submitting}>{submitting?"Wird gesendet…":"Anfrage verbindlich senden"}</button><button onClick={()=>setConfirmLead(false)}>Zurück zum Chat</button></div></div>}</div>
+      <div className="assistant-messages" ref={scroller}>{messages.map((m,i)=><div key={i} className={`assistant-message ${m.role}`}>{m.text}</div>)}{typing&&<div className="assistant-message assistant typing"><span/><span/><span/><em>tippt</em></div>}{handoff&&!typing&&<div className="assistant-handoff"><b>Das klingt bereits konkret.</b><span>Ich habe genug Informationen, um daraus eine Projektanfrage zu machen. Möchtest du, dass ich sie direkt an den Projektleiter weitergebe?</span><div><button onClick={prepareLead}>Anfrage weitergeben</button><button onClick={()=>setHandoff(false)}>Noch etwas besprechen</button></div></div>}{confirmLead&&!typing&&<div className="assistant-handoff assistant-confirm"><b>Projektanfrage prüfen</b><span><strong>{lead.projectType||"Digitalprojekt"}</strong>{lead.company?` · ${lead.company}`:""}{lead.location?` · ${lead.location}`:""}</span><span>Budget: {lead.budget||"nicht genannt"} · Zeitraum: {lead.timeframe||"nicht genannt"}</span><span>Funktionen: {(lead.features||[]).join(", ")||"noch offen"}</span><span>Kontakt: {lead.name} · {lead.email}{lead.phone?` · ${lead.phone}`:""}</span><small>Mit „Anfrage unverbindlich senden“ speicherst du die Zusammenfassung und den Gesprächsauszug als Projektanfrage. Es entsteht kein Auftrag.</small><div><button onClick={submitLead} disabled={submitting}>{submitting?"Wird gesendet…":"Anfrage unverbindlich senden"}</button><button onClick={()=>setConfirmLead(false)}>Zurück zum Chat</button></div></div>}</div>
       <div className="assistant-quick"><button onClick={()=>send("Was kostet eine professionelle Website bei euch?")}>Preise</button><button onClick={()=>send("Was kann euer KI-Chatbot für mein Unternehmen?")}>KI-Chatbot</button><button onClick={()=>send("Ich möchte ein Projekt planen. Welche Infos brauchst du von mir?")}>Projekt planen</button><button onClick={()=>{setOpen(false);navigate("builder")}}>Builder öffnen</button></div>
       <div className="assistant-input"><input value={input} disabled={typing} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder={typing?"JX Assistant tippt…":"Nachricht schreiben…"} aria-label="Nachricht"/><button disabled={typing} onClick={()=>send()} aria-label="Senden"><Send size={17}/></button></div>
-      <small className="assistant-note">KI-Assistent · Antworten können Fehler enthalten · Angebote werden persönlich geprüft.</small>
+      <small className="assistant-note">Digitaler Assistent · Antworten bitte prüfen. Keine sensiblen Daten eingeben. <Link href="/datenschutz">Datenschutz</Link></small>
     </div>}
     <button className="assistant-trigger" onClick={()=>setOpen(v=>!v)} aria-label="JX Assistant öffnen">{open ? <X/> : <><MessageCircle/><span>JX Assistant</span></>}</button>
   </div>;
@@ -730,12 +744,12 @@ function Home({ navigate }: { navigate: (view: View) => void }) {
         <h1>Deine Website.<br /><em>Nicht von der Stange.</em></h1>
         <p>JX Studio entwickelt Websites, Shops, Kundenportale und individuelle Web-Anwendungen, die hochwertig aussehen und im echten Alltag funktionieren.</p>
         <div className="hero-actions"><button className="btn-primary" onClick={() => navigate("builder")}>Website konfigurieren <ArrowRight size={18} /></button><button className="btn-secondary" onClick={() => navigate("consultation")}><CalendarDays size={17}/> Gemeinsam planen</button></div>
-        <div className="hero-proof"><span><Check /> Klare Preise</span><span><Check /> Mobile inklusive</span><span><Check /> Persönliche Umsetzung</span></div>
+        <div className="hero-proof"><span><Check /> Persönliche Angebote</span><span><Check /> Mobile inklusive</span><span><Check /> Persönliche Umsetzung</span></div>
       </div>
       <div className="hero-product reveal" aria-label="Vorschau des Website-Konfigurators">
         <div className="product-top"><i /><i /><i /><span>jxstudio.de / studio</span></div>
         <div className="product-body"><aside><b>SEITEN</b><span className="active">Startseite</span><span>Leistungen</span><span>Referenzen</span><span>Kontakt</span><button>+ Seite</button></aside><div className="product-canvas"><nav><strong>NORDWERK</strong><span>Leistungen &nbsp; Referenzen &nbsp; Kontakt</span></nav><div className="mock-hero"><small>MEISTERBETRIEB AUS BREMEN</small><h3>Qualität, die<br />man sehen kann.</h3><button>Projekt anfragen</button></div></div><aside className="product-settings"><b>DESIGN</b><label>Akzent <i className="swatch" /></label><label>Rundung <span>20 px</span></label><label>Schrift <span>Modern</span></label><label>Layout <span>Split</span></label></aside></div>
-        <div className="price-float"><span>Aktueller Preis</span><strong>799 €</strong><small>Live berechnet</small></div>
+        <div className="price-float"><span>Dein Projekt</span><strong>Individuell</strong><small>Unverbindlich anfragen</small></div>
       </div>
     </section>
 
@@ -761,8 +775,8 @@ function Home({ navigate }: { navigate: (view: View) => void }) {
     <section className="section light-section reveal">
       <div className="section-head"><span className="eyebrow dark">Was wir bauen</span><h2>Von der Website<br />bis zum digitalen System.</h2><p>Ein Ansprechpartner für Konzeption, Gestaltung, Entwicklung und Weiterentwicklung. Ohne fünf Agenturen für fünf Aufgaben.</p></div>
       <div className="service-grid">
-        <article className="service-card featured"><span>01</span><WandSparkles /><h3>Websites</h3><p>Individuell oder auf Basis eines hochwertigen Templates. Responsive, schnell und auf echte Anfragen ausgelegt.</p><button onClick={() => navigate("builder")}>Ab 799 € <ArrowRight /></button></article>
-        <article className="service-card"><span>02</span><ShoppingBag /><h3>Online-Shops</h3><p>Produktwelten, Checkout-Prozesse und klare Nutzerführung für Unternehmen, die online verkaufen wollen.</p><button onClick={() => navigate("services")}>Ab 1.699 € <ArrowRight /></button></article>
+        <article className="service-card featured"><span>01</span><WandSparkles /><h3>Websites</h3><p>Individuell oder auf Basis eines hochwertigen Templates. Responsive, schnell und auf echte Anfragen ausgelegt.</p><button onClick={() => navigate("builder")}>Projekt anfragen <ArrowRight /></button></article>
+        <article className="service-card"><span>02</span><ShoppingBag /><h3>Online-Shops</h3><p>Produktwelten, Checkout-Prozesse und klare Nutzerführung für Unternehmen, die online verkaufen wollen.</p><button onClick={() => navigate("services")}>Projekt anfragen <ArrowRight /></button></article>
         <article className="service-card"><span>03</span><Code2 /><h3>Software & Webapps</h3><p>Kundenportale, Dashboards, interne Tools und individuelle Funktionen, wenn Standardsoftware nicht reicht.</p><button onClick={() => navigate("services")}>Individuell <ArrowRight /></button></article>
         <article className="service-card ai-card"><span>04</span><Bot /><h3>KI-Chatbots</h3><p>Individuelle Support- und Lead-Assistenten, die Unternehmenswissen nutzen, Fragen beantworten und Interessenten vorqualifizieren.</p><button onClick={() => navigate("services")}>Live-Demo öffnen <ArrowRight /></button></article>
       </div>
@@ -781,10 +795,10 @@ function Home({ navigate }: { navigate: (view: View) => void }) {
     </section>
 
     <section className="section pricing-section reveal">
-      <div className="section-head"><span className="eyebrow dark">Transparente Preise</span><h2>Du weißt vorher,<br />womit du rechnest.</h2></div>
+      <div className="section-head"><span className="eyebrow dark">Persönliche Angebote</span><h2>Du weißt vorher,<br />womit du rechnest.</h2></div>
       <div className="price-cards">
-        <article><span>Template Website</span><h3>799 €</h3><p>Bis 5 Seiten, responsive, Kontaktformular, Basis-SEO und Launch-Unterstützung.</p><ul><li><Check /> Im Studio frei anpassbar</li><li><Check /> Eigene Farben & Inhalte</li><li><Check /> Professionell finalisiert</li></ul><button onClick={() => navigate("builder")}>Jetzt konfigurieren</button></article>
-        <article className="price-highlight"><span>Custom Website</span><h3>ab 1.499 €</h3><p>Individuelles Konzept und Design für Unternehmen, die eine eigenständige digitale Marke brauchen.</p><ul><li><Check /> Individuelles UI-System</li><li><Check /> Strategie & Seitenstruktur</li><li><Check /> Erweiterbare Funktionen</li></ul><button onClick={() => navigate("contact")}>Projekt anfragen</button></article>
+        <article><span>Template Website</span><h3>Individuelles Angebot</h3><p>Bis 5 Seiten, responsive, Kontaktformular, Basis-SEO und Launch-Unterstützung.</p><ul><li><Check /> Im Studio frei anpassbar</li><li><Check /> Eigene Farben & Inhalte</li><li><Check /> Professionell finalisiert</li></ul><button onClick={() => navigate("builder")}>Jetzt konfigurieren</button></article>
+        <article className="price-highlight"><span>Custom Website</span><h3>Individuelles Angebot</h3><p>Individuelles Konzept und Design für Unternehmen, die eine eigenständige digitale Marke brauchen.</p><ul><li><Check /> Individuelles UI-System</li><li><Check /> Strategie & Seitenstruktur</li><li><Check /> Erweiterbare Funktionen</li></ul><button onClick={() => navigate("contact")}>Projekt anfragen</button></article>
         <article><span>Software / Portal</span><h3>individuell</h3><p>Web-Anwendungen und Portale werden nach Funktionsumfang, Rollen und Datenlogik kalkuliert.</p><ul><li><Check /> Webapps & Dashboards</li><li><Check /> Kundenbereiche</li><li><Check /> Automatisierungen</li></ul><button onClick={() => navigate("services")}>Details ansehen</button></article>
       </div>
     </section>
@@ -794,6 +808,7 @@ function Home({ navigate }: { navigate: (view: View) => void }) {
       <div className="founder-copy"><p>JX Studio steht für direkte Planung, klares Design und technische Umsetzung ohne unnötige Zwischenstationen. Projekte werden von Anfang an so gedacht, dass Design und Development zusammenpassen.</p><div className="founder-sign"><strong>Joel Schneider</strong><span>Founder · Design & Development</span></div></div>
     </section>
 
+    <section className="section portfolio-section reveal"><div className="section-head"><span className="eyebrow">Konzeptprojekt · keine Kundenreferenz</span><h2>Praxis am Park.</h2><p>Eine Website-Demo für eine Arztpraxis: klare Leistungsübersicht, verständliche Patienteninformationen und eine ruhige Gestaltung. Entwickelt als Konzeptarbeit von JX STUDIO.</p></div><Link href="/praxis-demo" className="portfolio-demo"><div className="practice-preview" aria-hidden="true"><span>PRAXIS AM PARK</span><strong>Medizin mit Zeit.<br/>Für Menschen.</strong><span>HAUSARZTPRAXIS · DESIGNKONZEPT</span></div><span>Webdesign · Gesundheitswesen — Demo ansehen →</span></Link></section>
     <FAQ />
     <section className="final-cta reveal"><span className="eyebrow">Bereit?</span><h2>Mach aus deiner Idee<br />ein echtes Produkt.</h2><button onClick={() => navigate("builder")}>Studio öffnen <ArrowRight /></button></section>
   </main>;
@@ -834,25 +849,24 @@ function TemplatesPage({ filter, setFilter, onPreview, onChoose, onFreeStart }: 
           <div className={`mini-site ${template.layout}`}><nav><b>{template.name.toUpperCase()}</b><span>{profile.pageNames.slice(1).join(" · ")}</span></nav><small>{profile.kicker}</small><h3>{template.headline}</h3><span className="mini-cta">{profile.cta}</span></div>
           <span className="preview-button">Interaktive Vorschau <ExternalLink size={14} /></span>
         </button>
-        <div className="template-info"><div><span>{template.category}</span><h2>{template.name}</h2><p>{template.style} · {profile.pageNames.length} Seiten</p></div><div className="template-price"><small>ab</small><strong>799 €</strong></div></div>
+        <div className="template-info"><div><span>{template.category}</span><h2>{template.name}</h2><p>{template.style} · {profile.pageNames.length} Seiten</p></div><div className="template-price"><small>Angebot</small><strong>individuell</strong></div></div>
         <button className="template-select" onClick={() => onChoose(template)}>Template wählen <ArrowRight size={16} /></button>
       </article>;
     })}</section>
   </main>;
 }
 
-function ServicesPage({ navigate }: { navigate: (view: View) => void }) {
-  const services = [
-    { icon: <WandSparkles />, name: "Template Website", price: "799 €", description: "Der schnelle hochwertige Start mit visueller Konfiguration und professioneller Finalisierung.", details: ["Bis 5 Seiten", "Mobile & Desktop", "Kontaktformular", "Basis SEO", "Studio-Konfiguration"] },
-    { icon: <Palette />, name: "Custom Website", price: "ab 1.499 €", description: "Komplett individuelles Design mit eigener Struktur, Art Direction und Komponenten.", details: ["Individuelles UI", "Strategie", "Content-Struktur", "SEO Basis", "Erweiterbar"] },
-    { icon: <ShoppingBag />, name: "E-Commerce", price: "ab 1.699 €", description: "Shops mit klarer Produktführung, sauberem Checkout und einem System, das wartbar bleibt.", details: ["Produktstruktur", "Checkout", "Responsive", "Tracking", "Technische Einrichtung"] },
-    { icon: <Code2 />, name: "Software & Webapps", price: "individuell", description: "Kundenportale, interne Tools, Dashboards und individuelle digitale Prozesse.", details: ["Rollen & Logins", "Datenmodelle", "Dashboards", "APIs", "Automatisierungen"] },
-    { icon: <Bot />, name: "KI-Chatbots & Support", price: "ab 690 €", description: "Digitale Assistenten für Support, Beratung und Leadgenerierung, passend zur Website und zum Unternehmen.", details: ["Unternehmenswissen", "Support & FAQ", "Lead-Qualifizierung", "Corporate Design", "Optionale API/CRM-Anbindung"] },
-    { icon: <Rocket />, name: "Online-Präsenz & Marketing", price: "nach Umfang", description: "Landingpages, Tracking und technische Grundlagen für Kampagnen und bessere digitale Sichtbarkeit.", details: ["Landingpages", "Tracking", "SEO Struktur", "Conversion UX", "Betreuung"] },
-  ];
-  return <main className="page-main"><section className="page-intro"><span className="eyebrow"><Code2 size={14} /> Leistungen</span><h1>Website ist nur<br /><em>der Anfang.</em></h1><p>JX Studio verbindet Design und Entwicklung. Damit kann aus einer Landingpage später genauso ein Kundenportal oder digitales System werden.</p></section><section className="full-service-list">{services.map((service, index) => <article key={service.name}><span className="service-number">0{index + 1}</span><span className="service-icon">{service.icon}</span><div className="service-main"><h2>{service.name}</h2><p>{service.description}</p></div><ul>{service.details.map((detail) => <li key={detail}><Check /> {detail}</li>)}</ul><strong>{service.price}</strong></article>)}</section><section className="service-end"><h2>Du weißt noch nicht, welche Lösung passt?</h2><button className="btn-primary" onClick={() => navigate("contact")}>Projekt kurz beschreiben <ArrowRight /></button></section></main>;
+function ServicesPage({ navigate, configure }: { navigate: (view: View) => void; configure: (type: string, description: string) => void }) {
+  const renderServices = (items: typeof digitalServices) => items.map((service, index) => <article key={service.name}><span className="service-number">{String(index + 1).padStart(2, "0")}</span><span className="service-icon"><Code2 /></span><div className="service-main"><h2>{service.name}</h2><p>{service.description}</p><button className="btn-secondary" onClick={() => configure(service.type, service.name)}>Lösung konfigurieren <ArrowRight size={16}/></button></div><ul>{service.details.map(detail => <li key={detail}><Check /> {detail}</li>)}</ul><strong>Individuelles Angebot</strong></article>);
+  return <main className="page-main"><section className="page-intro"><span className="eyebrow"><Code2 size={14} /> Design. Development. Digital Solutions.</span><h1>Website ist nur<br /><em>der Anfang.</em></h1><p>Webdesign in Stuhr und Bremen, Softwareentwicklung und digitale Lösungen für Unternehmen. Von der ersten Idee bis zur laufenden Betreuung.</p></section><section className="full-service-list">{renderServices(digitalServices)}</section><section className="page-intro"><h2>Individuelle Unternehmenslösungen.</h2><p>Nach deinen Anforderungen geplant und entwickelt. Diese Lösungen sind individuell anfragbare Leistungen; Umfang, Integration und Umsetzung werden persönlich abgestimmt.</p></section><section className="full-service-list">{renderServices(businessSolutions)}</section><section className="service-end"><h2>Du weißt noch nicht, welche Lösung passt?</h2><button className="btn-primary" onClick={() => navigate("contact")}>Projekt kurz beschreiben <ArrowRight /></button></section></main>;
 }
 
+
+function ProjectBrief({ builder, setBuilder }: { builder: BuilderState; setBuilder: BuilderSetter }) {
+  const brief = builder.projectBrief ?? { projectType: "Unternehmenswebsite", industry: "", start: "", budget: "", description: "" };
+  const update = (patch: Partial<typeof brief>) => setBuilder(prev => ({ ...prev, projectBrief: { ...brief, ...patch } }));
+  return <fieldset className="project-brief"><legend>Dein Projekt</legend><label className="input-label">Projekttyp<select value={brief.projectType} onChange={e=>update({projectType:e.target.value})}>{projectTypes.map(type=><option key={type}>{type}</option>)}</select></label><label className="input-label">Branche<select value={brief.industry} onChange={e=>update({industry:e.target.value})}><option value="">Bitte auswählen</option>{projectIndustries.map(industry=><option key={industry}>{industry}</option>)}</select></label><label className="input-label">Gewünschter Projektbeginn<input value={brief.start} maxLength={120} placeholder="z. B. im Frühjahr oder nach Absprache" onChange={e=>update({start:e.target.value})}/></label><label className="input-label">Budget (optional)<input value={brief.budget} maxLength={120} onChange={e=>update({budget:e.target.value})}/></label><label className="input-label">Projektbeschreibung<textarea value={brief.description} maxLength={4000} rows={4} onChange={e=>update({description:e.target.value})}/></label><p className="panel-help">Die Website-Vorschau zeigt deine Designrichtung. Individuelle Softwarefunktionen werden im Angebot spezifiziert.</p></fieldset>;
+}
 
 function RequirementsPanel({ builder, setBuilder }: { builder: BuilderState; setBuilder: BuilderSetter }) {
   const req = normalizeRequirements(builder.requirements);
@@ -950,7 +964,7 @@ function RequirementsPanel({ builder, setBuilder }: { builder: BuilderState; set
   </div>;
 }
 
-function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePage, device, setDevice, tab, setTab, selectedTemplate, price, openCheckout, openTemplates, undo, redo, canUndo, canRedo, savedAt }: {
+function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePage, device, setDevice, tab, setTab, selectedTemplate, openCheckout, openTemplates, undo, redo, canUndo, canRedo, savedAt }: {
   builder: BuilderState; setBuilder: BuilderSetter; currentPage: PageConfig; activePage: string; setActivePage: (id: string) => void; device: Device; setDevice: (device: Device) => void; tab: string; setTab: (tab: string) => void; selectedTemplate: Template; price: number; openCheckout: () => void; openTemplates: () => void; undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean; savedAt: number | null;
 }) {
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -960,6 +974,7 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
   const [phone, setPhone] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(currentPage.sections[0]?.id ?? null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const projectFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const query = window.matchMedia("(max-width: 760px)");
@@ -967,7 +982,7 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
     sync(); query.addEventListener("change", sync); return () => query.removeEventListener("change", sync);
   }, []);
 
-  const updatePage = (updater: (page: PageConfig) => PageConfig) => setBuilder((prev) => ({ ...prev, pages: prev.pages.map((page) => page.id === activePage ? updater(page) : page) }));
+  const updatePage = (updater: (page: PageConfig) => PageConfig) => setBuilder((prev) => ({ ...prev, pages: prev.pages.map((page) => page.id === currentPage.id ? updater(page) : page) }));
   const moveSection = (index: number, direction: -1 | 1) => updatePage((page) => { const next = [...page.sections]; const target = index + direction; if (target < 0 || target >= next.length) return page; [next[index], next[target]] = [next[target], next[index]]; return { ...page, sections: next }; });
   const dropSection = (target: number) => {
     if (draggedSection === null || draggedSection === target) return;
@@ -975,9 +990,18 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
     setDraggedSection(null);
   };
   const addPage = () => { const id = newId("page"); setBuilder((prev) => ({ ...prev, pages: [...prev.pages, makePage(id, `Neue Seite ${prev.pages.length + 1}`, ["hero", "about", "cta"])] })); setActivePage(id); };
-  const duplicatePage = (page: PageConfig) => { const id = newId("page"); const copy = { ...page, id, name: `${page.name} Kopie`, sections: page.sections.map((section) => ({ ...section, id: newId(section.kind) })) }; setBuilder((prev) => ({ ...prev, pages: [...prev.pages, copy] })); setActivePage(id); };
+  const duplicatePage = (page: PageConfig) => {
+    const id = newId("page");
+    const sections = page.sections.map(section=>({...section,id:newId(section.kind)}));
+    const copy = {...page,id,name:`${page.name} Kopie`,sections};
+    setBuilder(prev=>{ const customText={...prev.customText}; page.sections.forEach((section,index)=>{ const prefix=`${page.id}:${section.id}:`; for(const [key,value] of Object.entries(prev.customText)) if(key.startsWith(prefix)) customText[`${id}:${sections[index].id}:${key.slice(prefix.length)}`]=value; }); return {...prev,pages:[...prev.pages,copy],customText}; }); setActivePage(id);
+  };
   const removePage = (id: string) => { if (builder.pages.length <= 1) return; const fallback = builder.pages.find((page) => page.id !== id)?.id ?? "home"; setBuilder((prev) => ({ ...prev, pages: prev.pages.filter((page) => page.id !== id) })); setActivePage(fallback); };
-  const duplicateSection = (index: number) => updatePage((page) => { const next = [...page.sections]; next.splice(index + 1, 0, { ...page.sections[index], id: newId(page.sections[index].kind) }); return { ...page, sections: next }; });
+  const duplicateSection = (index: number) => {
+    const source=currentPage.sections[index], id=newId(source.kind), prefix=`${currentPage.id}:${source.id}:`;
+    setBuilder(prev=>{ const customText={...prev.customText}; for(const [key,value] of Object.entries(prev.customText)) if(key.startsWith(prefix)) customText[`${currentPage.id}:${id}:${key.slice(prefix.length)}`]=value;
+      return {...prev,customText,pages:prev.pages.map(page=>{if(page.id!==currentPage.id)return page;const sections=[...page.sections];sections.splice(index+1,0,{...source,id});return {...page,sections};})}; });
+  };
   const updateText = (key: string, value: string) => setBuilder((prev) => ({ ...prev, customText: { ...prev.customText, [key]: value } }));
   const handleUpload = (file?: File) => {
     if (!file) return;
@@ -989,7 +1013,21 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
   };
   const chooseGalleryImage = (url: string) => setBuilder((prev) => ({ ...prev, content: { ...prev.content, image: url } }));
   const phoneDesktop = phone && device === "desktop";
-  const compileLive = async () => { setBuilder(prev=>({...prev,editorMode:"pro"})); try { const r=await fetch("/api/compile-site",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({configuration:{...builder,resolvedContent:profileFor(builder.industry),resolvedImages:imageSets[builder.industry]??[],content:{...builder.content,image:builder.content.image.startsWith("data:")?"":builder.content.image}}})}); const d = await r.json() as { error?: string; files?: Record<string, string> }; if(!r.ok) throw new Error(d.error ?? "Live-Code konnte nicht kompiliert werden."); setCompiledCode(d.files ?? {}); setCodeOpen(true); } catch { toast.error("Live-Code konnte nicht kompiliert werden."); } };
+  const compileLive = async () => { setBuilder(prev=>({...prev,editorMode:"pro"})); try { const r=await fetch("/api/compile-site",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({configuration:{...builder,resolvedContent:profileFor(builder.industry),resolvedImages:imageSets[builder.industry]??[],content:builder.content}})}); const d = await r.json() as { error?: string; files?: Record<string, string> }; if(!r.ok) throw new Error(d.error ?? "Live-Code konnte nicht kompiliert werden."); setCompiledCode(d.files ?? {}); setCodeOpen(true); } catch { toast.error("Live-Code konnte nicht kompiliert werden."); } };
+  const download = (blob: Blob, name: string) => { const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = name; link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); };
+  const saveProject = () => download(new Blob([JSON.stringify(builder,null,2)],{type:"application/json"}), "JX-Projekt.json");
+  const loadProject = async (file?: File) => {
+    if (!file) return;
+    try {
+      if (file.size > 2_500_000) throw new Error("Projektdatei zu groß.");
+      const raw = JSON.parse(await file.text());
+      if (!raw || typeof raw.company !== "string" || !Array.isArray(raw.pages) || !raw.pages.length || raw.pages.length > 40 || !raw.pages.every((p: PageConfig)=>p && typeof p.id === "string" && typeof p.name === "string" && Array.isArray(p.sections) && p.sections.every(s=>s && s.kind in sectionLabels)) || !Array.isArray(raw.addons) || !raw.addons.every((a: unknown)=>typeof a === "string")) throw new Error("Ungültige Projektdatei.");
+      const next = normaliseBuilder(raw); setBuilder(next); setActivePage(next.pages[0].id); toast.success("Projekt geladen. Der vorherige Stand bleibt über Rückgängig erreichbar.");
+    } catch { toast.error("Projektdatei konnte nicht geladen werden. Dein aktuelles Projekt bleibt erhalten."); }
+  };
+  const exportWebsite = async () => {
+    try { const response = await fetch("/api/compile-site", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({format:"zip",configuration:{...builder,resolvedContent:profileFor(builder.industry),resolvedImages:imageSets[builder.industry]??[]}}) }); if (!response.ok) throw new Error(); download(await response.blob(),"JX-Website-Export.zip"); toast.success("Website-Entwurf exportiert. Hinweise in der README vor Veröffentlichung beachten."); } catch { toast.error("Export fehlgeschlagen. Bitte sichere zunächst die Projektdatei."); }
+  };
   const selectedSection = currentPage.sections.find((section) => section.id === selectedSectionId) ?? currentPage.sections[0];
   const patchSelectedSection = (patch: Partial<SectionConfig>) => selectedSection && updatePage((page) => ({ ...page, sections: page.sections.map((section) => section.id === selectedSection.id ? { ...section, ...patch } : section) }));
   const patchSectionStyle = (patch: Partial<SectionStyle>) => selectedSection && patchSelectedSection({ style: { ...(selectedSection.style ?? {}), ...patch } });
@@ -999,7 +1037,7 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
 
   return <main className="builder-page">
     <div className="builder-bar">
-      <div className="builder-project"><span className="status-dot" /><strong>{builder.company || "Neues Projekt"}</strong><small>{savedAt ? "Gespeichert" : "Speichert …"}</small></div>
+      <div className="builder-project"><span className="status-dot" /><strong>{builder.company || "Neues Projekt"}</strong><small>{savedAt ? "Lokal gespeichert" : "Noch nicht lokal gesichert"}</small></div>
       <div className="builder-center-tools"><button onClick={undo} disabled={!canUndo} aria-label="Rückgängig"><Undo2 size={16} /></button><button onClick={redo} disabled={!canRedo} aria-label="Wiederholen"><Redo2 size={16} /></button><div className="editor-mode-switch" aria-label="Editor-Modus">{(["easy","advanced","pro"] as const).map(m=><button key={m} className={(builder.editorMode??"easy")===m?"active":""} onClick={()=>setBuilder(prev=>({...prev,editorMode:m}))}>{m==="easy"?"Easy":m==="advanced"?"Advanced":"JX Pro"}</button>)}</div><DeviceSwitch device={device} setDevice={setDevice} /></div>
       <div className="builder-actions"><button className="tools-button" onClick={compileLive}><Code2 size={16}/> Code</button><button className="tools-button" onClick={() => setToolsOpen((value) => !value)}><Palette size={16} /> Werkzeuge</button><button className="finish-button" onClick={openCheckout}>Anfrage abschließen <ArrowRight size={16} /></button></div>
     </div>
@@ -1007,9 +1045,9 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
       <aside className={`builder-sidebar ${toolsOpen ? "mobile-open" : ""}`}>
         <div className="mobile-panel-head"><strong>Website-Werkzeuge</strong><button onClick={() => setToolsOpen(false)} aria-label="Werkzeuge schließen"><X /></button></div>
         <Tabs value={tab} onValueChange={setTab} className="builder-tabs">
-          <TabsList><TabsTrigger value="structure"><Layers3 size={16} /><span>Struktur</span></TabsTrigger><TabsTrigger value="content"><Copy size={16} /><span>Inhalt</span></TabsTrigger><TabsTrigger value="design"><Palette size={16} /><span>Design</span></TabsTrigger><TabsTrigger value="features"><Sparkles size={16} /><span>Funktionen</span></TabsTrigger></TabsList>
+          <TabsList><TabsTrigger value="structure" aria-label="Struktur"><Layers3 size={16} /><span>Struktur</span></TabsTrigger><TabsTrigger value="content" aria-label="Inhalt"><Copy size={16} /><span>Inhalt</span></TabsTrigger><TabsTrigger value="design" aria-label="Design"><Palette size={16} /><span>Design</span></TabsTrigger><TabsTrigger value="features" aria-label="Funktionen"><Sparkles size={16} /><span>Funktionen</span></TabsTrigger></TabsList>
           <TabsContent value="structure" className="tab-panel">
-            <div className="panel-heading"><div><small>SEITEN</small><h2>Website-Struktur</h2></div><button onClick={addPage} aria-label="Seite hinzufügen"><Plus /></button></div>
+            <div className="project-file-actions"><button onClick={saveProject}>Projektdatei sichern</button><button onClick={()=>projectFileRef.current?.click()}>Projekt laden</button><button onClick={exportWebsite}>Website als ZIP</button><input type="file" accept="application/json,.json" ref={projectFileRef} hidden onChange={e=>{void loadProject(e.target.files?.[0]);e.target.value="";}}/></div><p className="panel-help">Mehrere Projekte als einzelne Dateien verwalten. Browser-Speicherung ersetzt kein Backup.</p><div className="panel-heading"><div><small>SEITEN</small><h2>Website-Struktur</h2></div><button onClick={addPage} aria-label="Seite hinzufügen"><Plus /></button></div>
             <div className="page-list">{builder.pages.map((page) => <div key={page.id} className={page.id === activePage ? "page-row active" : "page-row"}><button className="page-select" onClick={() => setActivePage(page.id)} aria-label={`${page.name} auswählen`}><GripVertical size={15} /></button><input className="page-name-input" aria-label="Seitenname" value={page.name} onFocus={() => setActivePage(page.id)} onChange={(event) => setBuilder((prev) => ({ ...prev, pages: prev.pages.map((item) => item.id === page.id ? { ...item, name: event.target.value } : item) }))} /><button className="icon-action" onClick={() => duplicatePage(page)} aria-label="Seite duplizieren"><Copy size={14} /></button>{builder.pages.length > 1 && <button className="icon-danger" onClick={() => removePage(page.id)} aria-label="Seite löschen"><Trash2 size={15} /></button>}</div>)}</div>
             <div className="panel-divider" />
             <div className="panel-heading"><div><small>SEKTIONEN</small><h2>{currentPage.name}</h2></div></div>
@@ -1057,14 +1095,15 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
 
           <TabsContent value="features" className="tab-panel">
             <div className="panel-heading"><div><small>OPTIONEN</small><h2>Funktionen</h2></div></div>
+            <ProjectBrief builder={builder} setBuilder={setBuilder}/>
             <p className="panel-help">Wähle Funktionen und hinterlege direkt die Daten, die JX für die Umsetzung wirklich braucht.</p><RequirementsPanel builder={builder} setBuilder={setBuilder} />
             <div className="industry-module-box"><div className="module-heading"><b>{builder.industry} Funktionen</b><small>Branchenspezifische Logik, nicht nur Design.</small></div>{(industryModules[builder.industry] ?? []).map((module) => <label className="industry-module" key={module.key}><Checkbox checked={builder.addons.includes(module.key)} onCheckedChange={(checked) => setBuilder((prev) => { const requirements=normalizeRequirements(prev.requirements); const addons=checked?[...new Set([...prev.addons,module.key])]:prev.addons.filter(item=>item!==module.key); const appointmentKeys=new Set(["beauty-booking","practice-appointments","tattoo-consultation","restaurant-reservations"]); const realEstateKeys=new Set(["realestate-listings","realestate-viewings"]); const fitnessKeys=new Set(["fitness-classes","fitness-trial"]); const automotiveKeys=new Set(["auto-booking","auto-inventory"]); const serviceRequestKeys=new Set(["trade-estimator","cleaning-request"]); return {...prev,addons,requirements:{...requirements,appointments:appointmentKeys.has(module.key)?{...requirements.appointments,enabled:Boolean(checked)}:requirements.appointments,restaurantMenu:module.key==="restaurant-menu"?{...requirements.restaurantMenu,enabled:Boolean(checked)}:requirements.restaurantMenu,realEstate:realEstateKeys.has(module.key)?{...requirements.realEstate,enabled:addons.some(key=>realEstateKeys.has(key))}:requirements.realEstate,fitness:fitnessKeys.has(module.key)?{...requirements.fitness,enabled:addons.some(key=>fitnessKeys.has(key))}:requirements.fitness,automotive:automotiveKeys.has(module.key)?{...requirements.automotive,enabled:addons.some(key=>automotiveKeys.has(key))}:requirements.automotive,serviceRequest:serviceRequestKeys.has(module.key)?{...requirements.serviceRequest,enabled:addons.some(key=>serviceRequestKeys.has(key))}:requirements.serviceRequest}}; })}/><span><b>{module.title}</b><small>{module.copy}</small></span></label>)}</div>
-            <div className="addon-list">{Object.entries(addonLabels).map(([key, label]) => <label key={key}><Checkbox checked={builder.addons.includes(key)} onCheckedChange={(checked) => setBuilder((prev) => { const requirements=normalizeRequirements(prev.requirements); return { ...prev, addons: checked ? [...new Set([...prev.addons, key])] : prev.addons.filter((item) => item !== key), requirements: key==="booking" ? { ...requirements, appointments:{...requirements.appointments,enabled:Boolean(checked)} } : key==="shop" ? { ...requirements, commerce:{...requirements.commerce,enabled:Boolean(checked)} } : requirements }; })} /><span><b>{label}</b><small>+ {money(addonPrices[key])}</small></span></label>)}</div>
-            <div className="switch-row"><div><b>Care-Paket</b><small>Updates & Support · 49,99 €/Monat</small></div><Switch checked={builder.care} onCheckedChange={(checked) => setBuilder((prev) => ({ ...prev, care: checked }))} /></div>
-            <div className="switch-row"><div><b>Express-Umsetzung</b><small>Priorisierte Umsetzung · +20 %</small></div><Switch checked={builder.rush} onCheckedChange={(checked) => setBuilder((prev) => ({ ...prev, rush: checked }))} /></div>
+            <div className="addon-list">{Object.entries(addonLabels).map(([key, label]) => <label key={key}><Checkbox checked={builder.addons.includes(key)} onCheckedChange={(checked) => setBuilder((prev) => { const requirements=normalizeRequirements(prev.requirements); return { ...prev, addons: checked ? [...new Set([...prev.addons, key])] : prev.addons.filter((item) => item !== key), requirements: key==="booking" ? { ...requirements, appointments:{...requirements.appointments,enabled:Boolean(checked)} } : key==="shop" ? { ...requirements, commerce:{...requirements.commerce,enabled:Boolean(checked)} } : requirements }; })} /><span><b>{label}</b><small>Individuelles Angebot</small></span></label>)}</div>
+            <div className="switch-row"><div><b>Care-Paket</b><small>Updates & Support · Individuelles Angebot</small></div><Switch checked={builder.care} onCheckedChange={(checked) => setBuilder((prev) => ({ ...prev, care: checked }))} /></div>
+            <div className="switch-row"><div><b>Express-Umsetzung</b><small>Priorisierte Umsetzung nach Vereinbarung</small></div><Switch checked={builder.rush} onCheckedChange={(checked) => setBuilder((prev) => ({ ...prev, rush: checked }))} /></div>
           </TabsContent>
         </Tabs>
-        <div className="builder-price"><div><span>Einmalig ab</span><strong>{money(price)}</strong></div>{builder.care && <small>+ 49,99 € / Monat</small>}<button onClick={openCheckout}>Projekt abschließen <ArrowRight size={16} /></button></div>
+        <div className="builder-price"><div><span>Unverbindlich</span><strong>Individuelles Angebot</strong></div>{builder.care && <small>Wartung auf Anfrage</small>}<button onClick={openCheckout}>Projekt abschließen <ArrowRight size={16} /></button></div>
       </aside>
 
       <section className="canvas-area">
@@ -1076,7 +1115,7 @@ function BuilderPage({ builder, setBuilder, currentPage, activePage, setActivePa
         <span className="canvas-hint">Vorschau · {currentPage.name} · Texte direkt anklickbar · Änderungen werden live gespeichert</span>
       </section>
     </div>
-    {codeOpen && <div className="jx-code-panel"><div><strong>Live Production Code</strong><button onClick={()=>setCodeOpen(false)}>×</button></div><div className="jx-code-files">{Object.entries(compiledCode).map(([name,code])=><details key={name} open={name==="app/page.tsx"}><summary>{name}</summary><pre>{code}</pre></details>)}</div></div>}
+    {codeOpen && <div className="jx-code-panel"><div><strong>Website-Entwurf · Exportcode</strong><button onClick={()=>setCodeOpen(false)}>×</button></div><div className="jx-code-files">{Object.entries(compiledCode).map(([name,code])=><details key={name} open={name==="app/page.tsx"}><summary>{name}</summary><pre>{code}</pre></details>)}</div></div>}
     <div className="mobile-tool-fab"><button onClick={() => setToolsOpen(true)}><Palette size={18} /> Bearbeiten</button><button onClick={openCheckout}>Anfragen <ArrowRight size={17} /></button></div>
   </main>;
 }
@@ -1188,6 +1227,8 @@ function ContactPage() {
 }
 
 
+// Retained internal component; never mounted on the public website.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function DirectCheckout({ configuration, estimatedPrice, blocked = false, blockedReason = "" }: { configuration: BuilderState; estimatedPrice: number; blocked?: boolean; blockedReason?: string }) {
   const [loading, setLoading] = useState(false);
   const [accepted, setAccepted] = useState(false);
@@ -1218,30 +1259,32 @@ function InquiryForm({ configuration, estimatedPrice, onSuccess, compact = false
     requestId.current ??= crypto.randomUUID();
     const consentInput = event.currentTarget.elements.namedItem("consent") as HTMLInputElement | null;
     if (!consentInput?.checked) { toast.error("Bitte bestätige die Speicherung deiner Angaben."); return; }
+    const formElement = event.currentTarget;
     setSending(true); setSuccess(null);
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     const payload = Object.fromEntries(form.entries());
     try {
       const safeConfiguration = configuration ? { ...configuration, resolvedContent: profileFor(configuration.industry), resolvedImages: imageSets[configuration.industry] ?? [], content: { ...configuration.content, image: configuration.content.image.startsWith("data:") ? "[lokaler Upload – wird separat benötigt]" : configuration.content.image } } : undefined;
       const response = await fetch("/api/contact", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...payload, message: String(payload.message || "").trim() || (safeConfiguration ? "Ich möchte meine konfigurierte Website unverbindlich besprechen." : ""), requestId: requestId.current, source: safeConfiguration ? "builder" : "contact", configuration: safeConfiguration, estimatedPrice }) });
-      const data = await response.json() as { error?: string; reference?: string; emailSent?: boolean };
-      if (!response.ok) throw new Error(data.error || "Senden fehlgeschlagen");
+      const data = await response.json() as { error?: string; reference?: string; emailSent?: boolean; savedToDatabase?: boolean };
+      if (!response.ok || !data.savedToDatabase) throw new Error(data.error || "Senden fehlgeschlagen");
       if (data.emailSent === false) toast.warning("Anfrage gespeichert. Die E-Mail-Benachrichtigung ist aktuell noch nicht aktiv.");
-      setSuccess(data.reference ?? "Gesendet"); event.currentTarget.reset(); toast.success("Deine Anfrage wurde an JX Studio gesendet."); onSuccess?.();
+      setSuccess(data.reference ?? "Gesendet"); formElement.reset(); toast.success(`Deine Anfrage wurde gespeichert. Referenz: ${data.reference || "Gesendet"}`); onSuccess?.();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Bitte versuche es erneut."); }
     finally { setSending(false); }
   };
   if (success) return <div className="form-success"><Check /><h3>Anfrage angekommen.</h3><p>Referenz: <b>{success}</b><br />Wir melden uns persönlich bei dir.</p></div>;
   return <form className={compact ? "inquiry-form compact" : "inquiry-form"} onSubmit={submit}>
+    <label className="spam-trap" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" /></label>
     <div className="form-grid"><label>Dein Name *<input name="name" required minLength={2} autoComplete="name" /></label><label>E-Mail *<input name="email" required type="email" autoComplete="email" /></label></div>
     <div className="form-grid"><label>Unternehmen<input name="company" autoComplete="organization" /></label><label>Telefon<input name="phone" type="tel" autoComplete="tel" /></label></div>
     {!configuration && <label>Worum geht es?<select name="subject" defaultValue="Website"><option>Website</option><option>Online-Shop</option><option>Software / Webapp</option><option>Kundenportal</option><option>Online-Marketing</option><option>Betreuung</option><option>Sonstiges</option></select></label>}
     <label>{configuration ? "Zusätzliche Nachricht (optional)" : "Nachricht *"}<textarea name="message" required={!configuration} minLength={configuration ? undefined : 10} rows={compact ? 4 : 7} placeholder={configuration ? "Gibt es noch etwas, das wir wissen sollten?" : "Was möchtest du erreichen? Welche Seiten oder Funktionen brauchst du?"} /></label>
-    <label className="consent"><input type="checkbox" name="consent" required /><span>Ich stimme zu, dass meine Angaben zur Bearbeitung der Anfrage gespeichert werden.</span></label>
+    <label className="consent"><input type="checkbox" name="consent" required /><span>Ich habe die Datenschutzhinweise gelesen. Meine Angaben werden zur Bearbeitung der Anfrage gespeichert. <Link href="/datenschutz" target="_blank">Datenschutz lesen</Link></span></label>
     <button className="btn-primary submit-button" disabled={sending}>{sending ? "Wird gesendet …" : configuration ? "Konfiguration unverbindlich anfragen" : "Anfrage senden"} <ArrowRight size={17} /></button>
   </form>;
 }
 
 function Footer({ navigate }: { navigate: (view: View) => void }) {
-  return <footer className="main-footer"><div><BrandLogo onClick={() => navigate("home")} /><p>Webdesign, Development und digitale Systeme.<br />Entwickelt in Bremen.</p></div><div><b>Entdecken</b><button onClick={() => navigate("templates")}>Templates</button><button onClick={() => navigate("services")}>Leistungen</button><button onClick={() => navigate("builder")}>Studio</button><button onClick={() => navigate("consultation")}>Persönliche Beratung</button></div><div><b>Kontakt</b><a href="mailto:kontakt@jx-studio.de">kontakt@jx-studio.de</a><span>Bremen · Deutschlandweit</span><Link className="admin-link" href="/admin">Projekt-Eingang</Link></div><div className="footer-bottom"><span>© 2026 JX Studio</span><span><a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a></span></div></footer>;
+  return <footer className="main-footer"><div><BrandLogo onClick={() => navigate("home")} /><p>Webdesign, Development und digitale Systeme.<br />Entwickelt in Bremen.</p></div><div><b>Entdecken</b><button onClick={() => navigate("templates")}>Templates</button><button onClick={() => navigate("services")}>Leistungen</button><button onClick={() => navigate("builder")}>Studio</button><button onClick={() => navigate("consultation")}>Persönliche Beratung</button></div><div><b>Kontakt</b><a href="mailto:kontakt@jx-studio.de">kontakt@jx-studio.de</a><span>Bremen · Deutschlandweit</span><Link className="admin-link" href="/admin">Projekt-Eingang</Link></div><div className="footer-bottom"><span>© 2026 JX Studio</span><span><Link href="/impressum">Impressum</Link> · <Link href="/datenschutz">Datenschutz</Link></span></div></footer>;
 }

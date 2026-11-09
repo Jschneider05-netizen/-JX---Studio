@@ -8,7 +8,7 @@ const slug = (v: unknown) => String(v ?? "page").toLowerCase().replace(/[^a-z0-9
 const n = (v: unknown, fallback: number) => Number.isFinite(Number(v)) ? Number(v) : fallback;
 const color = (v: unknown, fallback: string) => typeof v === "string" && /^#[0-9a-f]{3,8}$/i.test(v) ? v : fallback;
 const imageUrl = (v: unknown) => {
-  if (typeof v !== "string" || v.length > 180000) return "";
+  if (typeof v !== "string" || v.length > 2_100_000) return "";
   if (/^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(v)) return v;
   try { const url = new URL(v); return url.protocol === "https:" ? url.href.replaceAll("'", "%27") : ""; }
   catch { return ""; }
@@ -27,7 +27,7 @@ export function isSiteConfig(value: unknown): value is BuilderState {
     && config.pages.every((page: unknown) => page !== null && typeof page === "object"
       && typeof (page as PageConfig).id === "string" && typeof (page as PageConfig).name === "string"
       && Array.isArray((page as PageConfig).sections) && (page as PageConfig).sections.length <= 60
-      && (page as PageConfig).sections.every((section: SectionConfig) => typeof section.id === "string" && typeof section.kind === "string"))
+      && (page as PageConfig).sections.every((section: SectionConfig) => section && typeof section.id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(section.id) && ["hero","services","about","projects","reviews","contact","cta"].includes(section.kind)))
     && config.content !== null && typeof config.content === "object"
     && typeof (config.content as BuilderState["content"]).headline === "string"
     && (config.customText === undefined || (config.customText !== null && typeof config.customText === "object"));
@@ -56,8 +56,8 @@ export async function buildSiteFiles(c:BuilderState,id:string):Promise<Record<st
     const st=s.style??{}, an=s.animation??{};
     const css = [
       st.paddingY != null ? `padding-top:${n(st.paddingY,80)}px;padding-bottom:${n(st.paddingY,80)}px` : "",
-      st.background ? `background:${color(st.background,c.surface)}` : "",
-      st.color ? `color:${color(st.color,c.text)}` : "",
+      st.background ? `background:${color(st.background,color(c.surface,"#fff"))}` : "",
+      st.color ? `color:${color(st.color,color(c.text,"#111"))}` : "",
       `opacity:${n(st.opacity,1)}`,
       `filter:blur(${n(st.blur,0)}px)`,
       `transform:translate(${n(st.offsetX,0)}px,${n(st.offsetY,0)}px) scale(${n(st.scale,100)/100}) rotate(${n(st.rotate,0)}deg)`,
@@ -128,14 +128,14 @@ export async function buildSiteFiles(c:BuilderState,id:string):Promise<Record<st
         const o = section.responsive?.[bp]; if (!o) continue;
         const r:string[]=[];
         if(o.paddingY!=null) r.push(`padding-top:${n(o.paddingY,80)}px`,`padding-bottom:${n(o.paddingY,80)}px`);
-        if(o.background) r.push(`background:${color(o.background,c.surface)}`);
-        if(o.color) r.push(`color:${color(o.color,c.text)}`);
+        if(o.background) r.push(`background:${color(o.background,color(c.surface,"#fff"))}`);
+        if(o.color) r.push(`color:${color(o.color,color(c.text,"#111"))}`);
         if(o.radius!=null) r.push(`border-radius:${n(o.radius,0)}px`);
         if(o.opacity!=null) r.push(`opacity:${n(o.opacity,1)}`);
         if(o.blur!=null) r.push(`filter:blur(${n(o.blur,0)}px)`);
         if(o.hidden===true) r.push("display:none");
         if(o.scale!=null||o.rotate!=null||o.offsetX!=null||o.offsetY!=null) r.push(`transform:translate(${n(o.offsetX,0)}px,${n(o.offsetY,0)}px) scale(${n(o.scale,100)/100}) rotate(${n(o.rotate,0)}deg)`);
-        if(r.length) rules += `[data-jx-section="${String(section.id).replace(/["\\]/g,"")}"]{${r.join(";")}}\n`;
+        if(r.length) rules += `[data-jx-section="${String(section.id).replace(/[^a-zA-Z0-9_-]/g,"")}"]{${r.join(";")}}\n`;
       }
       if(rules) out += `@media ${mq}{${rules}}\n`;
     }

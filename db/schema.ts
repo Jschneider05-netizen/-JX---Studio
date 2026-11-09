@@ -53,6 +53,7 @@ export const availability = pgTable("availability", {
 
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
+  inquiryId: integer("inquiry_id"),
   orderId: integer("order_id"),
   customerEmail: text("customer_email").notNull().default(""),
   name: text("name").notNull().default("JX Studio Projekt"),

@@ -2,10 +2,11 @@ import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { availability } from "@/db/schema";
 
-const authorized = (request: Request) => Boolean(process.env.JXSTUDIO_ADMIN_KEY) && request.headers.get("x-admin-key") === process.env.JXSTUDIO_ADMIN_KEY;
+import { authorized } from "@/lib/admin-auth";
 export async function GET(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Nicht autorisiert." }, { status: 401 });
-  return Response.json({ slots: await getDb().select().from(availability).orderBy(availability.startsAt).limit(500) }, { headers: { "cache-control": "no-store" } });
+  try { return Response.json({ slots: await getDb().select().from(availability).orderBy(availability.startsAt).limit(500) }, { headers: { "cache-control": "no-store" } }); }
+  catch { return Response.json({error:"Zeitfenster konnten nicht geladen werden."},{status:503}); }
 }
 export async function POST(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Nicht autorisiert." }, { status: 401 });
@@ -28,6 +29,8 @@ export async function DELETE(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Nicht autorisiert." }, { status: 401 });
   const id = Number(new URL(request.url).searchParams.get("id"));
   if (!Number.isInteger(id) || id <= 0) return Response.json({ error: "Ungültige ID." }, { status: 400 });
-  await getDb().update(availability).set({ status: "blocked" }).where(eq(availability.id, id));
-  return Response.json({ ok: true });
+  try {
+    const rows=await getDb().update(availability).set({ status: "blocked" }).where(eq(availability.id, id)).returning({id:availability.id});
+    return rows.length ? Response.json({ ok: true }) : Response.json({error:"Zeitfenster nicht gefunden."},{status:404});
+  } catch { return Response.json({error:"Zeitfenster konnte nicht gesperrt werden."},{status:503}); }
 }

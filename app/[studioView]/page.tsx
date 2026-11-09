@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ studioVie
   if (!(studioView in views)) return {};
   const item = views[studioView as Slug];
   const base = process.env.PUBLIC_SITE_URL?.replace(/\/$/, "");
-  return { title: item.title, description: item.description, robots: { index: studioView !== "builder" && Boolean(base), follow: Boolean(base) }, alternates: base ? { canonical: `${base}/${studioView}` } : undefined, openGraph: { title: item.title, description: item.description, type: "website" } };
+  return { title: item.title, description: item.description, robots: { index: studioView !== "builder" && Boolean(base), follow: Boolean(base) }, alternates: base ? { canonical: `${base}/${studioView}` } : undefined, openGraph: { title: item.title, description: item.description, type: "website", images: [{ url: "/opengraph-image", width: 1200, height: 630 }] } };
 }
 export default async function StudioView({ params }: { params: Promise<{ studioView: string }> }) {
   const { studioView } = await params;

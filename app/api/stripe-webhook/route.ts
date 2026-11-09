@@ -28,6 +28,7 @@ async function sendPortalInvite(email:string, token:string) {
 }
 
 export async function POST(request: Request) {
+  if (process.env.JX_INTERNAL_BILLING_ENABLED !== "true") return Response.json({ error: "Zahlungsintegration deaktiviert." }, { status: 503 });
   const secret=process.env.STRIPE_WEBHOOK_SECRET, signature=request.headers.get("stripe-signature");
   if (!secret || !signature) return new Response("Invalid webhook",{status:400});
   const raw=await request.text();

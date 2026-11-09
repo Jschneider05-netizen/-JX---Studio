@@ -1,3 +1,4 @@
+import { authorized } from "@/lib/admin-auth";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { inquiries } from "@/db/schema";
@@ -6,8 +7,7 @@ import { buildSiteFiles, isSiteConfig, makeZip } from "@/lib/site-export";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const configured = process.env.JXSTUDIO_ADMIN_KEY;
-  if (!configured || request.headers.get("x-admin-key") !== configured) return Response.json({ error:"Nicht autorisiert." }, { status:401 });
+  if (!authorized(request)) return Response.json({ error:"Nicht autorisiert." }, { status:401 });
   const id = Number(new URL(request.url).searchParams.get("id"));
   if (!Number.isInteger(id) || id <= 0) return Response.json({ error:"Ungültige Anfrage." }, { status:400 });
   try {

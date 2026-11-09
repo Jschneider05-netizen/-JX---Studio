@@ -1,37 +1,95 @@
-# JX Studio
+# JX STUDIO – Design. Development. Digital Solutions.
 
-Bestehende Next.js-Produktionsanwendung mit 27 Template-Varianten aus neun Branchen, Website-Builder, Projektanfragen, Beratungsterminen, Adminbereich und Kundenportal. Das Projektverzeichnis heißt `JX_Studio_FINAL`.
+Weiterentwicklung des bestehenden Next.js-Projekts, Stand 9. November 2026.
+Kein Neuaufbau. Originaldesign, 27 Templates, visueller Builder, Assistant, Admin,
+Portal, PostgreSQL-Strukturen und Praxis-Demo sind erhalten.
+
+**Status: lokal geprüfter Release-Kandidat, noch nicht produktiv ausgerollt.**
+Der Archivname `JX_STUDIO_FINAL_COMPLETE_2026.zip` bezeichnet die abschließende
+Quellcodeübergabe dieser Arbeit, keine Zusicherung einer bereits abgenommenen
+Produktion. Vor dem Rollout sind die Punkte in OPEN_ITEMS.md abzuarbeiten.
 
 ## Lokal starten
 
-Node.js >= 22.13 und pnpm 11.25 verwenden:
+Voraussetzungen: Node 24.14.1 (getestet), pnpm 11.25.0, PostgreSQL für Datenbankfunktionen.
 
-```bash
+```sh
 pnpm install --frozen-lockfile
+cp .env.example .env.local
+# Lokale Datenbank und einen eigenen Admin-Schlüssel in .env.local eintragen.
 pnpm dev
-pnpm build
-pnpm exec tsc --noEmit
-pnpm lint
 ```
 
-Für Render: Build `pnpm install --frozen-lockfile && pnpm build`, Start `pnpm start`. Secrets ausschließlich als Server-Umgebungsvariablen hinterlegen, siehe `.env.example`.
+Die vorhandenen historischen Sites-Skripte bleiben erhalten. Für dieses Render-/Next.js-
+Projekt ist der direkte pnpm-Aufruf vorgesehen; die Linux-Sites-Installationsskripte
+sind kein notwendiger Teil des lokalen macOS-Starts.
 
-## Datenbank und externe Aktivierung
+```sh
+pnpm exec tsc --noEmit
+pnpm lint
+node tests/request-body.mjs
+pnpm build
+pnpm start
+```
 
-Die Anwendung verwendet PostgreSQL über `DATABASE_URL`. Die SQL-Dateien `drizzle-pg/0000_jx_studio_postgres.sql` bis `0007_jx_studio_order_integrity.sql` in Reihenfolge auf einer vorher gesicherten Datenbank anwenden. Bei einer bestehenden Datenbank das Schema und Migrationsjournal vor Anwendung abgleichen. Terminbuchung, persistente Leads, Projektportal und Stripe-Aufträge benötigen die Datenbank.
+`PUBLIC_SITE_URL=https://jx-studio.de` ist für produktive Indexierung erforderlich.
+Ohne diese Variable sperrt robots.txt die Indexierung, sinnvoll für Testumgebungen.
 
-`JXSTUDIO_ADMIN_KEY` schützt `/admin` und den Website-ZIP-Export. `CONTACT_EMAIL`, `MAIL_FROM` und `RESEND_API_KEY` aktivieren Benachrichtigungen. Ohne E-Mail-Konfiguration können Anfragen nur bei erfolgreicher Datenbank-Speicherung angenommen werden. `OPENAI_API_KEY` und `OPENAI_MODEL` aktivieren freie KI-Antworten; ohne diese nutzt der Assistent einen begrenzten regelbasierten Ablauf.
+## Projekt bedienen
 
-Direktzahlung bleibt deaktiviert, bis `DIRECT_CHECKOUT_ENABLED=true`, Stripe-Schlüssel, Webhook-Secret, Datenbank und gültige HTTPS-URLs für Vertragsbedingungen und Datenschutz vorliegen. Webhook-Endpunkt: `/api/stripe-webhook`. Nach Stripe-Testzahlung Projektanlage, Portal-Einladung, Beträge und Rechnungen auf der Zielumgebung prüfen. Reale Domain, E-Mail-Absenderdomain, Impressum, Datenschutz, Steuerdaten und AGB müssen vor dem öffentlichen Launch ergänzt und geprüft werden. Weitere Schritte in `LAUNCH_CHECKLIST.md`.
+- `/templates`: 27 vorhandene Vorlagen, neun Branchen, drei Varianten je Branche.
+- `/builder`: Struktur, Inhalt, Design, Funktionen und Projektangaben. Desktop-, Laptop-,
+  Tablet- und Mobilvorschau; Sections verschieben, Texte bearbeiten, Undo/Redo.
+- Projektdatei sichern/laden: mehrere Projekte als getrennte JSON-Dateien verwalten.
+  Browser-Autosave hält nur den aktuellen Entwurf; eine Projektdatei ist das unabhängige Backup.
+- Website als ZIP: HTML/CSS-Entwurf inklusive Konfiguration und Exporthinweisen.
+  Branchenmodule im Export sind Vorschauen und erfordern kundenspezifische Backend-Anbindung.
+- Anfrage abschließen: vollständige Zusammenfassung, anschließend unverbindliches Formular.
+- `/leistungen`: sechs Hauptleistungen und fünf individuell anfragbare Unternehmenslösungen.
+- `/admin`: Zugangsschlüssel, Anfragen, Status, Termine und Projekte. „Als Projekt übernehmen“
+  erstellt ein Projekt mit Portal-Link ohne Zahlung. Keine automatischen Kunden-E-Mails dabei.
+- `/portal?token=…`: persönlicher Projektzugriff; Links vertraulich behandeln.
+- `/praxis-demo`: bestehende externe Demo nach bewusstem Laden, als Konzept gekennzeichnet.
 
-## Builder und Export
+## Backend und Datenhaltung
 
-Der Builder hält die SiteConfig als zentrale Konfiguration und speichert lokale Entwürfe im Browser. `/api/compile-site` und der geschützte ZIP-Export unter `/api/generate-site` verwenden dieselbe `buildSiteFiles`-Funktion und die eigenständige CSS-Runtime `public/jx-studio-runtime.css`. Die interaktive Vorschau wird in React gerendert, während der Export HTML aus derselben SiteConfig erzeugt: eine pixelgenaue Gleichheit aller Browser und aller erweiterten Builder-Einstellungen ist damit noch nicht garantiert.
+Next.js Route Handler → Drizzle ORM → PostgreSQL. Datenbankschema: `db/schema.ts`.
+SQL-Migrationen für die aktive Plattform: `drizzle-pg/0000…0008`.
+`drizzle/` enthält ältere SQLite-/D1-Migrationen, `drizzle-postgres/` eine frühere
+PostgreSQL-Variante. Sie bleiben erhalten, dürfen aber nicht blind zusätzlich eingespielt werden.
+Das aktive SQL-Verzeichnis hat kein Drizzle-Migrationsjournal; `pnpm db:migrate`
+ist deshalb keine verifizierte Produktionsanleitung. Siehe DEPLOYMENT.md.
 
-Der ZIP-Export ist eine statische Beispielwebsite. Die Kontaktfläche wird nach Eintrag einer E-Mail zu einem `mailto:`-Link; ein serverseitiges Kundenformular, Online-Buchung, Shop und branchenbezogene Module sind im statischen Export nicht automatisch aktiv. Externe Bilder sind nicht in der ZIP eingebettet. Beispielprojekte und -bewertungen müssen vor einer Kundenveröffentlichung durch belegbare Inhalte ersetzt werden. Rechtstexte, eigene Domain und echte Geschäftsdaten gehören in jede veröffentlichte Kundenwebsite.
+Kontaktanfragen werden nur nach bestätigter Datenbankspeicherung als Erfolg gemeldet.
+Resend-Benachrichtigungen benötigen einen eingerichteten und verifizierten Absender.
+Ein Mailfehler nach erfolgreicher Speicherung erzeugt keinen erneuten Lead.
+Ein dauerhafter Mail-Retry-/Outbox-Prozess ist noch nicht implementiert.
 
-Das Kundenportal zeigt Projektstatus, Versionen, Freigaben und vorhandene Stripe-Rechnungen. Inhalte, Domain und Support werden derzeit persönlich koordiniert und sind nicht als abgeschlossene Self-Service-Funktionen dargestellt.
+## Zahlungen und KI
 
-## Sicherheits- und Betriebsnotizen
+Öffentliches `/api/checkout`: immer deaktiviert. Keine Sofortbestellung.
+Interne Stripe-Webhooks: standardmäßig ebenfalls deaktiviert. Bestehender Code bleibt erhalten.
+Zahlungsintegrationen für Kunden-Shops bleiben eine anfragbare Entwicklungsleistung.
 
-Administrative Aktionen benötigen den serverseitig geprüften Schlüssel. Stripe-Webhooks prüfen HMAC-Signatur und Zeitstempel; Datenbanktransaktionen schützen Buchungen und Projektversionen. Das einfache API-Rate-Limit ist pro Prozess und für einen Mehrinstanzbetrieb kein zentraler Ersatz für ein Gateway oder Redis. Portal-Links enthalten einen geheimen Zugriffstoken und müssen vertraulich weitergegeben werden. Die endgültige Produktionsabnahme und externe Integrationsprüfung stehen in `LAUNCH_CHECKLIST.md`.
+Der Assistant funktioniert im Standardbetrieb als regelbasierter Projektberater.
+Externe KI ist mit `JX_ASSISTANT_EXTERNAL_ENABLED=false` deaktiviert. Eine Aktivierung
+benötigt Anbieterprüfung, aktualisierte Datenschutzhinweise und eine geprüfte Nutzerinformation.
+Es sind keine verbindlichen Festpreise freigegeben; öffentlich erscheint „Individuelles Angebot“.
+
+## Sicherungen und Wiederherstellung
+
+Das Original stammt vom mit GitHub-main abgeglichenen Commit
+`08058842034a1ca84b597816ef1ce24a0fe8d2b1`.
+Die Arbeit liegt auf `development/final-completion-2026`.
+Original, Zwischenstand und Abschlussstand sind separate ZIPs mit vollständigem Quellcode.
+Nicht enthalten: node_modules, .next, echte .env-Dateien, Laufzeitdaten, Datenbankinhalte.
+Die ZIPs ersetzen kein Produktions-Datenbankbackup. Externe Bilder und die extern gehostete
+Praxis-Demo sind verlinkte Ressourcen, nicht lokal eingebettete Fremdprojekte.
+
+Zum Wiederherstellen ein ZIP in einen **neuen** Ordner entpacken, Abhängigkeiten installieren,
+lokale Umgebungsvariablen konfigurieren und testen. Niemals einen produktiven Ordner blind
+überschreiben. Datenbank-Rollbacks nur anhand eines verifizierten Backups planen.
+
+Die Markdown-Dokumente dieses Release-Stands sind maßgeblich. Ältere `JX_*.md`,
+`LAUNCH_*.md` und `PROJECT_HANDOFF.md` bleiben als historische Dokumentation erhalten;
+deren frühere Freigabe- oder Erfolgsaussagen sind keine aktuellen Testergebnisse.

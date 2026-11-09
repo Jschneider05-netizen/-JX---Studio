@@ -1,32 +1,4 @@
-export default function PraxisDemo() {
-  return (
-    <main style={{ margin: 0, background: "#fff" }}>
-      <div style={{
-        background: "#080b12",
-        color: "white",
-        padding: "12px 20px",
-        fontFamily: "Arial",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: 16,
-        flexWrap: "wrap"
-      }}>
-        <strong>JX STUDIO · PRAXIS AM PARK</strong>
-        
-      </div>
-
-      <iframe
-        src="https://praxis-am-park-jx.ample-gem-3729.chatgpt.site/"
-        title="Praxis am Park – Live-Demo"
-        style={{
-          width: "100%",
-          height: "calc(100dvh - 52px)",
-          border: 0,
-          display: "block"
-        }}
-        allowFullScreen
-      />
-    </main>
-  );
-}
+import type { Metadata } from "next";
+import PraxisDemoFrame from "@/components/praxis-demo-frame";
+export const metadata: Metadata = { title: "Praxis am Park – Konzeptprojekt | JX STUDIO", description: "Webdesign-Konzept für eine Arztpraxis von JX STUDIO. Als Demo gestaltet, keine Kundenreferenz.", alternates: { canonical: "/praxis-demo" } };
+export default function PraxisDemo() { return <PraxisDemoFrame/>; }

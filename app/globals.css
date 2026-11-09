@@ -1020,3 +1020,13 @@ html, body { background: var(--jx-bg); }
     padding-bottom: 110px;
   }
 }
+
+/* Focused additions retain the existing JX visual system. */
+.spam-trap{position:absolute!important;left:-10000px;width:1px;height:1px;overflow:hidden}
+.project-brief{border:0;padding:0;margin:0 0 24px;min-width:0}.project-brief legend{font-weight:700;margin-bottom:14px}.project-brief select{width:100%;padding:10px;background:#15171c;color:#fff;border:1px solid #343945;border-radius:8px}
+.project-summary{display:grid;grid-template-columns:minmax(90px,1fr) 2fr;gap:10px 18px;padding:20px;border:1px solid #343945;border-radius:12px}.project-summary dt{color:#a9b2c4}.project-summary dd{margin:0;overflow-wrap:anywhere}
+.project-file-actions{display:flex;flex-wrap:wrap;gap:8px}.project-file-actions button{border:1px solid #343945;padding:9px;border-radius:8px;font-size:12px}.portfolio-demo{display:block;text-decoration:none;color:inherit}.practice-preview{background:#e5efea;color:#234e43;padding:clamp(24px,6vw,64px);display:grid;gap:28px;border-radius:12px;margin-bottom:16px}.practice-preview strong{font-family:Georgia,serif;font-size:clamp(32px,5vw,64px);line-height:1.1}.practice-preview span{font-size:12px;letter-spacing:.12em}.full-service-list .service-main button{margin-top:18px}.checkout-total strong{font-size:clamp(20px,3vw,32px)}
+@media(max-width:760px){.project-summary{grid-template-columns:1fr}.project-summary dd{margin-bottom:8px}.builder-bar,.builder-actions{flex-wrap:wrap}.price-grid h3{font-size:26px}.assistant-panel{max-height:calc(100dvh - 140px)}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}.reveal{opacity:1!important;transform:none!important}}
+@media(max-width:760px){.jx-shell .builder-bar{height:104px;grid-template-columns:minmax(0,1fr) auto;align-items:center}.jx-shell .builder-center-tools{max-width:280px;gap:6px}.jx-shell .builder-layout{height:calc(100% - 104px)}.jx-shell .builder-project strong{max-width:76px}.jx-shell .editor-mode-switch{min-height:30px}.jx-shell .builder-sidebar{min-height:0;max-height:calc(100dvh - 90px)}}
+.legal-inner{min-width:0;overflow-wrap:anywhere}.legal-inner h1{font-size:clamp(32px,7vw,72px);hyphens:auto}
