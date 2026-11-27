@@ -27,11 +27,23 @@ const notice=document.getElementById('praxis-hinweis');
 if(notice?.dataset.enabled==='true' && typeof notice.showModal==='function'){
   notice.showModal(); document.getElementById('hinweis-schliessen').addEventListener('click',()=>notice.close());
 }
-const concern=document.getElementById('anliegen');
-if(concern){
- const specialty=document.getElementById('fach'), field=document.getElementById('fachwahl'), other=document.getElementById('sonstige-feld'), label=document.getElementById('anfrage-label');
- const update=()=>{field.hidden=concern.value!=='Überweisung';other.hidden=specialty.value!=='Sonstige';label.textContent=concern.value==='Rezept'?'Organisatorische Rezeptanfrage (keine Medikamentennamen oder Gesundheitsdaten)':concern.value==='Überweisung'?'Organisatorischer Überweisungsgrund (keine Diagnosen oder Gesundheitsdaten)':'Organisatorischer Terminwunsch (keine Gesundheitsdaten)';};
- concern.addEventListener('change',update); specialty.addEventListener('change',update);update();
- document.getElementById('anfrage-form').addEventListener('submit',e=>e.preventDefault());
- document.getElementById('anfrage-mail').addEventListener('click',()=>{if(!confirm('Bitte prüfen Sie, dass Ihre Nachricht keine Gesundheitsdaten enthält. E-Mail ist kein sicherer Übertragungsweg für medizinische Informationen.'))return;const body=concern.value==='Überweisung'?'Fachrichtung: '+specialty.value+(specialty.value==='Sonstige'?' '+document.getElementById('sonstige').value:'')+'\n':'';location.href='mailto:bremen.ost.hausaerzte@gmail.com?subject='+encodeURIComponent(concern.value)+'&body='+encodeURIComponent(body+document.getElementById('anfrage-text').value);});
+const form=document.getElementById('anfrage-form');
+if(form){
+ const concern=document.getElementById('anliegen'), specialty=document.getElementById('fach'), field=document.getElementById('fachwahl'), other=document.getElementById('sonstige-feld'), label=document.getElementById('anfrage-label');
+ const button=document.getElementById('anfrage-send'), status=document.getElementById('anfrage-status');
+ const api='/api/praxis-contact';
+ const update=()=>{field.hidden=concern.value!=='Überweisung';other.hidden=field.hidden||specialty.value!=='Sonstige';label.textContent=concern.value==='Rezept'?'Rezeptanfrage':concern.value==='Überweisung'?'Organisatorischer Überweisungsgrund':concern.value==='Terminvereinbarung'?'Terminwunsch':'Ihre Nachricht';};
+ concern.addEventListener('change',update);specialty.addEventListener('change',update);update();
+ let available=false;
+ fetch(api,{cache:'no-store'}).then(async response=>{const data=await response.json();available=response.ok&&data.available===true;button.disabled=!available;status.textContent=available?'Ein Termin ist erst nach Bestätigung vereinbart.':'Online-Versand derzeit nicht verfügbar. Bitte kontaktieren Sie uns telefonisch.';}).catch(()=>{status.textContent='Online-Versand derzeit nicht verfügbar. Bitte kontaktieren Sie uns telefonisch.';});
+ form.addEventListener('submit',async event=>{
+  event.preventDefault();if(!available||!form.reportValidity())return;
+  button.disabled=true;status.textContent='Nachricht wird gesendet …';
+  try{
+   const response=await fetch(api,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('anfrage-name').value,email:document.getElementById('anfrage-email').value,concern:concern.value,specialty:field.hidden?'':specialty.value,other:other.hidden?'':document.getElementById('sonstige').value,message:document.getElementById('anfrage-text').value,consent:document.getElementById('anfrage-consent').checked,website:document.getElementById('anfrage-website').value})});
+   const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.message||'Der Versand war nicht möglich.');
+   form.reset();update();status.textContent='Ihre Nachricht wurde zur Übermittlung angenommen. Vielen Dank! Ein Termin ist erst nach Bestätigung vereinbart.';
+  }catch(error){status.textContent=error.message==='Failed to fetch'?'Die Verbindung ist fehlgeschlagen. Bitte versuchen Sie es erneut oder rufen Sie uns an.':error.message||'Der Versand war nicht möglich.';}
+  finally{button.disabled=!available;}
+ });
 }
