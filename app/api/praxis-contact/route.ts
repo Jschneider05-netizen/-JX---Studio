@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const text = ["Organisatorische Anfrage über die Praxiswebsite", `Name: ${name}`, `E-Mail: ${email}`, `Anliegen: ${concern}`, ...(concern === "Überweisung" ? [`Fachrichtung: ${specialty === "Sonstige" ? other : specialty}`] : []), "", message].join("\n");
     const res = await fetch("https://api.resend.com/emails", {method:"POST", headers:{Authorization:`Bearer ${process.env.PRAXIS_RESEND_API_KEY}`,"Content-Type":"application/json"}, body:JSON.stringify({from:process.env.PRAXIS_MAIL_FROM,to:[recipient],reply_to:email,subject:"Neue organisatorische Anfrage – Hausärzte Bremen Ost",text}),signal:AbortSignal.timeout(12000)});
     if(!res.ok) return reject("Der Versand war derzeit nicht möglich. Bitte rufen Sie uns an.",502);
-    const result = await res.json(); if(!result.id) return reject("Der Versand konnte nicht bestätigt werden.",502);
+    const result = await res.json() as { id?: string; message?: string; error?: string }; if(!result.id) return reject("Der Versand konnte nicht bestätigt werden.",502);
     return reply({ok:true});
   } catch { return reject("Die Anfrage konnte nicht verarbeitet werden. Bitte versuchen Sie es erneut oder rufen Sie uns an.",400); }
 }
